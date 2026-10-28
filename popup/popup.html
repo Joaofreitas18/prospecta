@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prospecta</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="../icons/icon32.png" alt="" width="22" height="22" />
+      <span>Prospecta</span>
+    </div>
+    <button id="toggle" class="status" type="button">
+      <i class="dot"></i><span id="toggle-label">Capturando</span>
+    </button>
+  </header>
+
+  <section class="summary">
+    <div class="total">
+      <b id="s-total">0</b>
+      <span>leads capturados</span>
+    </div>
+    <div class="bar" id="bar" aria-hidden="true">
+      <i class="seg seg--none"></i><i class="seg seg--social"></i><i class="seg seg--unknown"></i><i class="seg seg--site"></i>
+    </div>
+    <ul class="legend">
+      <li><i class="sw sw--none"></i>Sem site <b id="s-none">0</b></li>
+      <li><i class="sw sw--social"></i>Só rede social <b id="s-social">0</b></li>
+      <li><i class="sw sw--unknown"></i>Não verificado <b id="s-unknown">0</b></li>
+      <li><i class="sw sw--site"></i>Site próprio <b id="s-site">0</b></li>
+    </ul>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="live" aria-selected="true">Ao vivo <span class="count" id="c-live"></span></button>
+    <button role="tab" data-tab="best" aria-selected="false">Melhores</button>
+    <button role="tab" data-tab="export" aria-selected="false">Exportar</button>
+  </nav>
+
+  <main>
+    <section class="panel" data-panel="live">
+      <ol class="feed" id="feed"></ol>
+      <p class="empty" id="feed-empty">
+        Abra uma busca no Google Maps e role a lista.<br />As capturas aparecem aqui em tempo real.
+      </p>
+    </section>
+
+    <section class="panel" data-panel="best" hidden>
+      <ol class="rank" id="rank"></ol>
+      <p class="empty" id="rank-empty">Nenhum lead passa nos filtros atuais.</p>
+    </section>
+
+    <section class="panel" data-panel="export" hidden>
+      <div class="field">
+        <span class="label">Tipo de site</span>
+        <div class="segmented" id="f-type">
+          <button type="button" data-value="nosite">Sem site próprio</button>
+          <button type="button" data-value="nenhum">Só sem site</button>
+          <button type="button" data-value="all">Todos</button>
+        </div>
+      </div>
+      <label class="field">
+        <span class="label">Avaliações mínimas <output id="o-reviews">0</output></span>
+        <input id="f-reviews" type="range" min="0" max="500" step="10" value="0" />
+      </label>
+      <label class="field">
+        <span class="label">Score mínimo <output id="o-score">0</output></span>
+        <input id="f-score" type="range" min="0" max="100" step="5" value="0" />
+      </label>
+      <p class="hint" id="hint"></p>
+      <div class="actions">
+        <button id="export" class="btn btn--primary" type="button">Exportar CSV</button>
+        <button id="clear" class="btn btn--ghost" type="button">Limpar dados</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>
