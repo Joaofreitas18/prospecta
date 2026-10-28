@@ -1,0 +1,39 @@
+.prsp-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font: 600 10px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.prsp-badge--none   { background: #d93025; color: #fff; }
+.prsp-badge--social { background: #f9ab00; color: #202124; }
+.prsp-badge--site   { background: #e8eaed; color: #5f6368; }
+.prsp-badge--unknown { background: #5f6368; color: #fff; }
+
+#prsp-hud {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #202124;
+  color: #fff;
+  font: 500 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  user-select: none;
+}
+#prsp-hud strong { color: #81c995; }
+#prsp-hud.prsp-hud--paused strong { color: #fdd663; }
+#prsp-hud .prsp-hud__none   { color: #f28b82; }
+#prsp-hud .prsp-hud__social { color: #fdd663; }
