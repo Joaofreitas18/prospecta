@@ -11,7 +11,7 @@ Você faz uma busca no Maps (`google.com/maps` ou `google.com.br/maps`, tipo `ba
 O card da lista não mostra o site, mas o Maps baixa os resultados de 20 em 20 e cada lote já vem com site, telefone, endereço e coordenadas de todo mundo. A extensão lê esses lotes no momento em que chegam, então não precisa clicar em nada:
 
 - **rolando você mesmo**: cada lote que o Maps carrega entra classificado na hora
-- **Capturar tudo**: a extensão rola a lista sozinha até o fim. Uma busca inteira (uns 120 resultados) leva uns 15 segundos
+- **Capturar tudo**: a extensão rola a lista sozinha até o fim, com uma pausa curta entre os lotes. Uma busca inteira (uns 120 resultados) leva uns 25 segundos
 
 Se algum lead não vier no lote, a extensão abre o card dele pra completar. Isso é só reserva e dá pra desligar no painel.
 
@@ -46,6 +46,7 @@ O Maps mostra no máximo uns 120 resultados por busca, então vale buscar por ba
 - O Google muda o HTML do Maps sem avisar. O parser usa atributos ARIA e texto em vez de classe CSS pra quebrar menos, mas uma hora quebra. Quando acontecer, o ajuste é no `src/parser.js`.
 - Se você recarregar a extensão com o Maps aberto, ela tenta se reconectar sozinha. Se o contador na página ficar vermelho, é só dar F5.
 - O formato dos lotes não é documentado. Se o Google mudar, a leitura fica em `parseSearchBody()` no `src/parser.js`, e enquanto isso a extensão cai pro modo de abrir card por card, que é mais lento (uns 3 segundos por lead).
+- Se o Google achar o uso estranho, ele corta a lista e mostra "Esta é uma visualização limitada do Google Maps". A extensão para quando vê isso. Usar logado na sua conta e não rodar dezenas de buscas seguidas ajuda.
 - Com várias abas do Maps abertas, só a aba que está na frente abre cards. Os lotes são lidos em todas.
 
 ## Aviso

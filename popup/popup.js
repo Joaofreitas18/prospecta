@@ -3,7 +3,7 @@ const STATE_KEY = "capturing";
 const FILTER_KEY = "filters";
 const LOG_KEY = "log";
 const VERIFY_KEY = "verifying";
-const AUTO_KEY = "autoVerify";
+const AUTO_KEY = "autoComplete";
 
 const TIPO_LABEL = {
   nenhum: "Sem site",
@@ -37,7 +37,7 @@ const state = {
   log: [],
   capturing: true,
   verifying: false,
-  autoVerify: true,
+  autoVerify: false,
   filters: { type: "nosite", minReviews: 0, minScore: 0 },
   lastLogT: 0,
   openId: null,
@@ -388,7 +388,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes[LOG_KEY]) state.log = changes[LOG_KEY].newValue || [];
   if (changes[STATE_KEY]) state.capturing = changes[STATE_KEY].newValue !== false;
   if (changes[VERIFY_KEY]) state.verifying = changes[VERIFY_KEY].newValue === true;
-  if (changes[AUTO_KEY]) state.autoVerify = changes[AUTO_KEY].newValue !== false;
+  if (changes[AUTO_KEY]) state.autoVerify = changes[AUTO_KEY].newValue === true;
   renderAll();
 });
 
@@ -400,7 +400,7 @@ setInterval(renderFeed, 5000);
   state.log = data[LOG_KEY] || [];
   state.capturing = data[STATE_KEY] !== false;
   state.verifying = data[VERIFY_KEY] === true;
-  state.autoVerify = data[AUTO_KEY] !== false;
+  state.autoVerify = data[AUTO_KEY] === true;
   if (data[FILTER_KEY]) state.filters = { ...state.filters, ...data[FILTER_KEY] };
   renderAll();
 })();

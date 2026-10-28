@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prospecta",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Prospecção de clientes no Google Maps: captura empresas enquanto você rola a lista, identifica quem não tem site e exporta em CSV.",
   "permissions": [
     "storage",
@@ -22,17 +22,6 @@
     }
   },
   "content_scripts": [
-    {
-      "matches": [
-        "https://www.google.com/maps/*",
-        "https://www.google.com.br/maps/*"
-      ],
-      "js": [
-        "src/hook.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
     {
       "matches": [
         "https://www.google.com/maps/*",

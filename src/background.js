@@ -13,7 +13,6 @@ async function reinject() {
   for (const tab of tabs) {
     try {
       await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["src/content.css"] });
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["src/hook.js"], world: "MAIN" });
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["src/parser.js", "src/content.js"] });
     } catch {}
   }

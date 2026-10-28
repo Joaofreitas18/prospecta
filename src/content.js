@@ -3,7 +3,7 @@
   const STORE_KEY = "leads";
   const STATE_KEY = "capturing";
   const VERIFY_KEY = "verifying";
-  const AUTO_KEY = "autoVerify";
+  const AUTO_KEY = "autoComplete"; // clique de reserva, desligado por padrão
   const LOCK_KEY = "verifyLock";
   const CLEAR_KEY = "clearedAt";
   const LOG_KEY = "log";
@@ -17,7 +17,7 @@
   let leads = {};
   let log = [];
   let capturing = true;
-  let autoVerify = true;
+  let autoVerify = false;
   let fullRun = false; // botão "verificar tudo": também rola a lista
   let running = false;
   let dead = false;
@@ -108,10 +108,11 @@
   async function load() {
     const data = await chrome.storage.local.get([STORE_KEY, STATE_KEY, LOG_KEY, AUTO_KEY, CLEAR_KEY, VERIFY_KEY]);
     clearedAt = data[CLEAR_KEY] || 0;
-    leads = data[STORE_KEY] || {};
-    log = data[LOG_KEY] || [];
+    // mescla: algum lote pode ter chegado enquanto carregava
+    leads = mergeLeads(data[STORE_KEY], leads);
+    log = mergeLog(data[LOG_KEY], log);
     capturing = data[STATE_KEY] !== false;
-    autoVerify = data[AUTO_KEY] !== false;
+    autoVerify = data[AUTO_KEY] === true;
     fullRun = data[VERIFY_KEY] === true;
     renderHud();
   }
@@ -125,8 +126,11 @@
     }
     if (changes[STORE_KEY]) leads = mergeLeads(leads, changes[STORE_KEY].newValue);
     if (changes[LOG_KEY]) log = mergeLog(log, changes[LOG_KEY].newValue);
-    if (changes[STATE_KEY]) capturing = changes[STATE_KEY].newValue !== false;
-    if (changes[AUTO_KEY]) autoVerify = changes[AUTO_KEY].newValue !== false;
+    if (changes[STATE_KEY]) {
+      capturing = changes[STATE_KEY].newValue !== false;
+      if (capturing) [...pausedBatches].forEach((u) => (pausedBatches.delete(u), readBatch(u)));
+    }
+    if (changes[AUTO_KEY]) autoVerify = changes[AUTO_KEY].newValue === true;
     if (changes[VERIFY_KEY]) fullRun = changes[VERIFY_KEY].newValue === true;
     if (changes[LOCK_KEY]) lockOwner = changes[LOCK_KEY].newValue?.owner || null;
     renderHud();
@@ -203,9 +207,8 @@
       pushLog("novo", lead);
       scheduleFlush();
       renderHud();
-      scheduleFallback();
       kick();
-      setTimeout(kick, 4500); // o clique de reserva só vale depois de 4s
+      setTimeout(kick, 8500); // o clique de reserva só vale depois de 8s
     } else if (existing.fonte === "lote" && !existing.link_maps?.includes("/place/")) {
       // o lote chegou antes do card; troca o link curto pelo do card
       existing.link_maps = lead.link_maps;
@@ -241,6 +244,7 @@
   // ---- lotes (sem clique) ----
 
   const seenBatches = new Set();
+  const pausedBatches = new Set();
   const normUrl = (u) => {
     try {
       return new URL(u, location.href).href;
@@ -277,34 +281,33 @@
     renderHud();
   }
 
-  window.addEventListener("message", (e) => {
-    if (e.source !== window || e.data?.source !== "prospecta-hook" || typeof e.data.body !== "string") return;
-    seenBatches.add(normUrl(e.data.url));
-    ingestBatch(parseSearchBody(e.data.body));
-  });
-  window.postMessage({ source: "prospecta-ready" }, location.origin);
+  // cada lote é uma requisição /search?tbm=map; assim que ela termina,
+  // relê a mesma resposta e classifica os 20 de uma vez
+  async function readBatch(url) {
+    const key = normUrl(url);
+    if (seenBatches.has(key) || dead) return;
+    if (!capturing) return pausedBatches.add(url); // lê quando retomar
+    seenBatches.add(key);
+    try {
+      const res = await fetch(url, { credentials: "include", cache: "force-cache" });
+      ingestBatch(parseSearchBody(await res.text()));
+    } catch (err) {
+      debug("não consegui ler o lote", String(err));
+    }
+  }
 
-  // reserva: se o gancho não pegou algum lote, relê o mesmo endereço que o maps usou
-  let fallbackTimer = null;
-  function scheduleFallback() {
-    clearTimeout(fallbackTimer);
-    fallbackTimer = setTimeout(async () => {
-      if (dead || !capturing) return;
-      const pendentes = Object.values(leads).some((l) => !l.verificado);
-      if (!pendentes) return;
-      const urls = performance
-        .getEntriesByType("resource")
-        .map((e) => e.name)
-        .filter((u) => u.includes("tbm=map") && !seenBatches.has(normUrl(u)));
-      for (const u of urls) {
-        seenBatches.add(normUrl(u));
-        try {
-          const body = await (await fetch(u, { credentials: "include" })).text();
-          debug("lote relido pela reserva");
-          ingestBatch(parseSearchBody(body));
-        } catch {}
-      }
-    }, 2500);
+  // as releituras da extensão também aparecem aqui, mas o seenBatches evita ler duas vezes
+  const isMapsBatch = (e) => e.name.includes("tbm=map");
+
+  function watchBatches() {
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) if (isMapsBatch(e)) readBatch(e.name);
+      }).observe({ type: "resource", buffered: true });
+    } catch {
+      // navegador sem PerformanceObserver: confere de tempos em tempos
+      setInterval(() => performance.getEntriesByType("resource").forEach((e) => isMapsBatch(e) && readBatch(e.name)), 1500);
+    }
   }
 
   // ---- detalhe ----
@@ -379,20 +382,32 @@
     return [...document.querySelectorAll(CARD_SELECTOR)].find((a) => {
       const lead = leads[idOf(a)];
       const age = Date.now() - (Date.parse(lead?.capturado_em) || 0);
-      return lead && !lead.verificado && (lead.tentativas || 0) < MAX_TRIES && age > 4000;
+      return lead && !lead.verificado && (lead.tentativas || 0) < MAX_TRIES && age > 8000;
     });
   }
+
+  // o google corta a lista quando acha que o uso está estranho
+  const limitedView = () =>
+    /visualiza[çc][ãa]o limitada|limited view of google maps/i.test(document.querySelector('[role="feed"]')?.innerText || "");
 
   async function loadMore() {
     const feed = document.querySelector('[role="feed"]');
     if (!feed) return false;
     if (/chegou ao final da lista|reached the end of the list/i.test(feed.innerText)) return false;
     const before = document.querySelectorAll(CARD_SELECTOR).length;
-    for (let i = 0; i < 4; i++) {
+    // o maps só pede o próximo lote quando sente a rolagem chegar no fim; rolar pro
+    // mesmo ponto de novo não conta, então de tempos em tempos sobe um pouco e volta
+    for (let i = 0; i < 38; i++) {
+      if (i % 6 === 5) {
+        feed.scrollTop = Math.max(0, feed.scrollHeight - feed.clientHeight - 600);
+        await sleep(150);
+      }
       feed.scrollTop = feed.scrollHeight;
-      await sleep(1200);
+      await sleep(400);
       scan();
       if (document.querySelectorAll(CARD_SELECTOR).length > before) return true;
+      if (/chegou ao final da lista|reached the end of the list/i.test(feed.innerText)) return false;
+      if (limitedView()) return false;
     }
     return false;
   }
@@ -411,7 +426,7 @@
     renderHud();
     while (!dead && capturing && (autoVerify || fullRun)) {
       if (document.visibilityState !== "visible") break;
-      if (!fullRun && !nextUnverified()) break;
+      if (!fullRun && !(autoVerify && nextUnverified())) break;
       if (!(await holdLock())) {
         renderHud("outra aba do Maps está verificando");
         await sleep(2000);
@@ -422,17 +437,23 @@
         await sleep(400);
         continue;
       }
-      let a = nextUnverified();
+      let a = autoVerify ? nextUnverified() : null;
       if (!a) {
         if (fullRun) renderHud("rolando a lista");
+        if (fullRun && limitedView()) {
+          renderHud("o Google limitou a lista, tente de novo mais tarde");
+          await sleep(4000);
+          break;
+        }
         if (!fullRun || !(await loadMore())) {
           // pode ter card que ainda não completou 4s; espera um pouco antes de desistir
-          if (Object.values(leads).some((l) => !l.verificado && (l.tentativas || 0) < MAX_TRIES)) {
+          if (autoVerify && Object.values(leads).some((l) => !l.verificado && (l.tentativas || 0) < MAX_TRIES)) {
             await sleep(1500);
             if (nextUnverified()) continue;
           }
           break;
         }
+        await sleep(jitter(1000, 2000)); // ritmo de gente, pra não levar limite do google
         continue;
       }
       const id = idOf(a);
@@ -544,6 +565,7 @@
       attributes: true,
       attributeFilter: ["aria-label", "href", "data-item-id"],
     });
+    watchBatches();
     scan();
     checkDetail();
     kick();

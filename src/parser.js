@@ -312,5 +312,5 @@
       });
   }
 
-  window.ProspectaParser = { parseCard, parseDetail, parseSearchBody, scoreLead, placeKey, VERSION: "1.4.0" };
+  window.ProspectaParser = { parseCard, parseDetail, parseSearchBody, scoreLead, placeKey, VERSION: "1.4.1" };
 })();
