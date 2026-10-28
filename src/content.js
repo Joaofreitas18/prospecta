@@ -1,24 +1,24 @@
 (() => {
   const { parseCard, parseDetail, parseSearchBody, scoreLead, VERSION } = window.ProspectaParser;
-  const STORE_KEY = "leads";
-  const STATE_KEY = "capturing";
-  const VERIFY_KEY = "verifying";
-  const AUTO_KEY = "autoComplete"; // clique de reserva, desligado por padrão
+  const LEADS_KEY = "leads";
+  const CAPTURING_KEY = "capturing";
+  const CAPTURE_ALL_KEY = "verifying";
+  const OPEN_CARDS_KEY = "autoComplete"; // click fallback, off by default
   const LOCK_KEY = "verifyLock";
-  const CLEAR_KEY = "clearedAt";
+  const CLEARED_KEY = "clearedAt";
   const LOG_KEY = "log";
   const LOG_MAX = 80;
   const CARD_SELECTOR = 'a[href*="/maps/place/"]';
   const IDLE_MS = 2000;
   const LOCK_TTL = 6000;
-  const MAX_TRIES = 2;
+  const MAX_ATTEMPTS = 2;
   const TAB = Math.random().toString(36).slice(2);
 
   let leads = {};
   let log = [];
   let capturing = true;
-  let autoVerify = false;
-  let fullRun = false; // botão "verificar tudo": também rola a lista
+  let openCards = false;
+  let captureAll = false; // "capture all" button: also scrolls the list
   let running = false;
   let dead = false;
   let lastInput = 0;
@@ -26,10 +26,10 @@
   let pending = new Set();
   let flushTimer = null;
   let hud = null;
-  let lockOwner = null;
-  const stats = { ok: 0, falhas: 0 };
 
   const debug = (...a) => console.debug("[Prospecta]", ...a);
+  const t = (key, ...args) =>
+    (chrome.i18n?.getMessage(key) || key).replace(/\{(\d)\}/g, (_, i) => args[i] ?? "");
 
   const alive = () => {
     try {
@@ -46,7 +46,10 @@
     running = false;
     if (hud) {
       hud.className = "prsp-hud--dead";
-      hud.innerHTML = "<strong>Prospecta foi atualizada</strong><span>aperte F5 nesta página</span>";
+      hud.innerHTML = "<strong></strong><span></span>";
+      // static text, but the extension context is gone so getMessage may fail
+      hud.querySelector("strong").textContent = "Prospecta";
+      hud.querySelector("span").textContent = "F5";
     }
   }
 
@@ -55,17 +58,17 @@
     return chrome.storage.local.set(obj).catch(die);
   };
 
-  // ---- dados compartilhados entre abas ----
-  // cada aba tem sua cópia; na hora de salvar mescla lead a lead pelo mais recente
+  // ---- data shared between tabs ----
+  // every tab keeps its own copy; on save they are merged lead by lead, newest wins
 
   function mergeLeads(a = {}, b = {}) {
     const out = { ...a };
     for (const [id, lb] of Object.entries(b)) {
-      if ((lb.atualizado_em || 0) < clearedAt) continue;
+      if ((lb.updatedAt || 0) < clearedAt) continue;
       const la = out[id];
-      if (!la || (lb.atualizado_em || 0) > (la.atualizado_em || 0)) out[id] = lb;
+      if (!la || (lb.updatedAt || 0) > (la.updatedAt || 0)) out[id] = lb;
     }
-    for (const id of Object.keys(out)) if ((out[id].atualizado_em || 0) < clearedAt) delete out[id];
+    for (const id of Object.keys(out)) if ((out[id].updatedAt || 0) < clearedAt) delete out[id];
     return out;
   }
 
@@ -75,7 +78,7 @@
       .filter((e) => e.t >= clearedAt)
       .sort((x, y) => y.t - x.t)
       .filter((e) => {
-        const k = `${e.t}|${e.id}|${e.acao}`;
+        const k = `${e.t}|${e.id}|${e.action}`;
         if (seen.has(k)) return false;
         seen.add(k);
         return true;
@@ -84,17 +87,17 @@
   }
 
   function touch(lead) {
-    lead.atualizado_em = Date.now();
+    lead.updatedAt = Date.now();
     return lead;
   }
 
   async function flush() {
     if (!alive()) return die();
     try {
-      const cur = await chrome.storage.local.get([STORE_KEY, LOG_KEY]);
-      leads = mergeLeads(cur[STORE_KEY], leads);
+      const cur = await chrome.storage.local.get([LEADS_KEY, LOG_KEY]);
+      leads = mergeLeads(cur[LEADS_KEY], leads);
       log = mergeLog(cur[LOG_KEY], log);
-      await save({ [STORE_KEY]: leads, [LOG_KEY]: log });
+      await save({ [LEADS_KEY]: leads, [LOG_KEY]: log });
     } catch {
       die();
     }
@@ -106,38 +109,37 @@
   }
 
   async function load() {
-    const data = await chrome.storage.local.get([STORE_KEY, STATE_KEY, LOG_KEY, AUTO_KEY, CLEAR_KEY, VERIFY_KEY]);
-    clearedAt = data[CLEAR_KEY] || 0;
-    // mescla: algum lote pode ter chegado enquanto carregava
-    leads = mergeLeads(data[STORE_KEY], leads);
+    const data = await chrome.storage.local.get([LEADS_KEY, CAPTURING_KEY, LOG_KEY, OPEN_CARDS_KEY, CLEARED_KEY, CAPTURE_ALL_KEY]);
+    clearedAt = data[CLEARED_KEY] || 0;
+    // merge, a batch may have arrived while loading
+    leads = mergeLeads(data[LEADS_KEY], leads);
     log = mergeLog(data[LOG_KEY], log);
-    capturing = data[STATE_KEY] !== false;
-    autoVerify = data[AUTO_KEY] === true;
-    fullRun = data[VERIFY_KEY] === true;
+    capturing = data[CAPTURING_KEY] !== false;
+    openCards = data[OPEN_CARDS_KEY] === true;
+    captureAll = data[CAPTURE_ALL_KEY] === true;
     renderHud();
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local" || dead) return;
-    if (changes[CLEAR_KEY]) {
-      clearedAt = changes[CLEAR_KEY].newValue || 0;
+    if (changes[CLEARED_KEY]) {
+      clearedAt = changes[CLEARED_KEY].newValue || 0;
       leads = {};
       log = [];
     }
-    if (changes[STORE_KEY]) leads = mergeLeads(leads, changes[STORE_KEY].newValue);
+    if (changes[LEADS_KEY]) leads = mergeLeads(leads, changes[LEADS_KEY].newValue);
     if (changes[LOG_KEY]) log = mergeLog(log, changes[LOG_KEY].newValue);
-    if (changes[STATE_KEY]) {
-      capturing = changes[STATE_KEY].newValue !== false;
+    if (changes[CAPTURING_KEY]) {
+      capturing = changes[CAPTURING_KEY].newValue !== false;
       if (capturing) [...pausedBatches].forEach((u) => (pausedBatches.delete(u), readBatch(u)));
     }
-    if (changes[AUTO_KEY]) autoVerify = changes[AUTO_KEY].newValue === true;
-    if (changes[VERIFY_KEY]) fullRun = changes[VERIFY_KEY].newValue === true;
-    if (changes[LOCK_KEY]) lockOwner = changes[LOCK_KEY].newValue?.owner || null;
+    if (changes[OPEN_CARDS_KEY]) openCards = changes[OPEN_CARDS_KEY].newValue === true;
+    if (changes[CAPTURE_ALL_KEY]) captureAll = changes[CAPTURE_ALL_KEY].newValue === true;
     renderHud();
     kick();
   });
 
-  // ---- trava: só uma aba verifica por vez ----
+  // ---- lock: only one tab opens cards at a time ----
 
   async function holdLock() {
     const cur = (await chrome.storage.local.get(LOCK_KEY))[LOCK_KEY];
@@ -148,13 +150,16 @@
   }
 
   function releaseLock() {
-    chrome.storage.local.get(LOCK_KEY).then((d) => {
-      if (d[LOCK_KEY]?.owner === TAB) chrome.storage.local.remove(LOCK_KEY);
-    }).catch(() => {});
+    chrome.storage.local
+      .get(LOCK_KEY)
+      .then((d) => {
+        if (d[LOCK_KEY]?.owner === TAB) chrome.storage.local.remove(LOCK_KEY);
+      })
+      .catch(() => {});
   }
   window.addEventListener("pagehide", releaseLock);
 
-  // só eventos reais do usuário; os cliques da própria extensão não contam
+  // only real user input counts; the extension's own clicks don't
   ["wheel", "mousedown", "keydown", "touchstart"].forEach((type) =>
     window.addEventListener(
       type,
@@ -165,16 +170,16 @@
     )
   );
 
-  function pushLog(acao, lead) {
-    log.unshift({ t: Date.now(), acao, id: lead.id, nome: lead.nome, tipo_site: lead.tipo_site, score: lead.score, categoria: lead.categoria });
+  function pushLog(action, lead) {
+    log.unshift({ t: Date.now(), action, id: lead.id, name: lead.name, siteType: lead.siteType, score: lead.score, category: lead.category });
     if (log.length > LOG_MAX) log.length = LOG_MAX;
   }
 
   const BADGES = {
-    nenhum: ["SEM SITE", "prsp-badge--none"],
-    rede_social: ["SÓ REDE SOCIAL", "prsp-badge--social"],
-    nao_verificado: ["VERIFICANDO…", "prsp-badge--unknown"],
-    proprio: ["TEM SITE", "prsp-badge--site"],
+    none: ["badgeNone", "prsp-badge--none"],
+    social: ["badgeSocial", "prsp-badge--social"],
+    unverified: ["badgeUnverified", "prsp-badge--unknown"],
+    own: ["badgeOwn", "prsp-badge--site"],
   };
 
   function markCard(anchor, lead) {
@@ -186,16 +191,16 @@
       card.style.position = card.style.position || "relative";
       card.appendChild(el);
     }
-    let [label, cls] = BADGES[lead.tipo_site] || BADGES.nao_verificado;
-    if (!lead.verificado && (lead.tentativas || 0) >= MAX_TRIES) label = "NÃO ABRIU";
+    let [key, cls] = BADGES[lead.siteType] || BADGES.unverified;
+    if (!lead.verified && (lead.attempts || 0) >= MAX_ATTEMPTS) key = "badgeFailed";
     el.className = `prsp-badge ${cls}`;
-    el.textContent = lead.verificado ? `${label} · ${lead.score}` : label;
+    el.textContent = lead.verified ? `${t(key)} · ${lead.score}` : t(key);
   }
 
   const idOf = (a) => parseCard(a)?.id;
   const cardFor = (id) => [...document.querySelectorAll(CARD_SELECTOR)].find((a) => a.href.includes(id));
 
-  // ---- lista ----
+  // ---- result list ----
 
   function processAnchor(anchor) {
     if (!capturing || dead) return;
@@ -204,18 +209,18 @@
     const existing = leads[lead.id];
     if (!existing) {
       leads[lead.id] = touch(lead);
-      pushLog("novo", lead);
+      pushLog("new", lead);
       scheduleFlush();
       renderHud();
       kick();
-      setTimeout(kick, 8500); // o clique de reserva só vale depois de 8s
-    } else if (existing.fonte === "lote" && !existing.link_maps?.includes("/place/")) {
-      // o lote chegou antes do card; troca o link curto pelo do card
-      existing.link_maps = lead.link_maps;
+      setTimeout(kick, 8500); // the click fallback only applies after 8s
+    } else if (existing.source === "batch" && !existing.mapsUrl?.includes("/place/")) {
+      // the batch arrived before the card; swap the short link for the card's one
+      existing.mapsUrl = lead.mapsUrl;
       touch(existing);
       scheduleFlush();
-    } else if (!existing.verificado && ((!existing.nota && lead.nota) || (!existing.categoria && lead.categoria))) {
-      leads[lead.id] = touch({ ...existing, ...lead, capturado_em: existing.capturado_em });
+    } else if (!existing.verified && ((!existing.rating && lead.rating) || (!existing.category && lead.category))) {
+      leads[lead.id] = touch({ ...existing, ...lead, capturedAt: existing.capturedAt });
       scheduleFlush();
     }
     markCard(anchor, leads[lead.id]);
@@ -226,7 +231,7 @@
     drain();
   }
 
-  // o card entra vazio e o maps preenche depois
+  // cards are inserted empty and Maps fills them in afterwards
   let draining = false;
   function drain() {
     if (draining) return;
@@ -241,7 +246,7 @@
     );
   }
 
-  // ---- lotes (sem clique) ----
+  // ---- batches (no clicking) ----
 
   const seenBatches = new Set();
   const pausedBatches = new Set();
@@ -255,48 +260,48 @@
 
   function ingestBatch(places) {
     if (!capturing || dead || !places.length) return;
-    let changed = 0;
+    let added = 0;
     for (const p of places) {
       const ex = leads[p.id];
-      if (ex?.verificado && ex.fonte === "detalhe") continue; // o detalhe é mais completo
+      if (ex?.verified && ex.source === "detail") continue; // the detail pane has more data
       const merged = {
         ...ex,
         ...p,
-        busca: ex?.busca || p.busca,
-        capturado_em: ex?.capturado_em || p.capturado_em,
-        link_maps: ex?.link_maps?.includes("/place/") ? ex.link_maps : p.link_maps,
-        horario: ex?.horario || "",
-        tentativas: 0,
+        query: ex?.query || p.query,
+        capturedAt: ex?.capturedAt || p.capturedAt,
+        mapsUrl: ex?.mapsUrl?.includes("/place/") ? ex.mapsUrl : p.mapsUrl,
+        hours: ex?.hours || "",
+        attempts: 0,
       };
       leads[p.id] = touch(merged);
-      if (!ex?.verificado) {
-        pushLog("verificado", merged);
-        changed++;
+      if (!ex?.verified) {
+        pushLog("verified", merged);
+        added++;
       }
       const a = cardFor(p.id);
       if (a) markCard(a, merged);
     }
-    if (changed) debug(`lote: ${places.length} locais, ${changed} novos`);
+    if (added) debug(`batch: ${places.length} places, ${added} new`);
     scheduleFlush();
     renderHud();
   }
 
-  // cada lote é uma requisição /search?tbm=map; assim que ela termina,
-  // relê a mesma resposta e classifica os 20 de uma vez
+  // every batch is a /search?tbm=map request; as soon as it finishes,
+  // read the same response again and classify all 20 at once
   async function readBatch(url) {
     const key = normUrl(url);
     if (seenBatches.has(key) || dead) return;
-    if (!capturing) return pausedBatches.add(url); // lê quando retomar
+    if (!capturing) return pausedBatches.add(url); // read when resumed
     seenBatches.add(key);
     try {
       const res = await fetch(url, { credentials: "include", cache: "force-cache" });
       ingestBatch(parseSearchBody(await res.text()));
     } catch (err) {
-      debug("não consegui ler o lote", String(err));
+      debug("could not read batch", String(err));
     }
   }
 
-  // as releituras da extensão também aparecem aqui, mas o seenBatches evita ler duas vezes
+  // our own re-reads show up here too; seenBatches keeps them from being read twice
   const isMapsBatch = (e) => e.name.includes("tbm=map");
 
   function watchBatches() {
@@ -305,33 +310,33 @@
         for (const e of list.getEntries()) if (isMapsBatch(e)) readBatch(e.name);
       }).observe({ type: "resource", buffered: true });
     } catch {
-      // navegador sem PerformanceObserver: confere de tempos em tempos
+      // no PerformanceObserver: poll instead
       setInterval(() => performance.getEntriesByType("resource").forEach((e) => isMapsBatch(e) && readBatch(e.name)), 1500);
     }
   }
 
-  // ---- detalhe ----
+  // ---- detail pane ----
 
   function applyDetail(d) {
-    // aceita pelo id; se o maps mudou o formato do id, cai pro nome
-    const lead = leads[d.id] || Object.values(leads).find((l) => l.nome === d.nome && !l.verificado);
+    // match by id; if Maps changed the id format, fall back to the name
+    const lead = leads[d.id] || Object.values(leads).find((l) => l.name === d.name && !l.verified);
     if (!lead) return false;
-    if (lead.verificado && lead.site === d.site && (lead.telefone || !d.telefone)) return true;
+    if (lead.verified && lead.site === d.site && (lead.phone || !d.phone)) return true;
 
     Object.assign(lead, {
       site: d.site,
-      tipo_site: d.tipo_site,
-      telefone: d.telefone || lead.telefone,
-      endereco: d.endereco || lead.endereco,
-      horario: d.horario || lead.horario,
+      siteType: d.siteType,
+      phone: d.phone || lead.phone,
+      address: d.address || lead.address,
+      hours: d.hours || lead.hours,
       lat: d.lat ?? lead.lat,
       lng: d.lng ?? lead.lng,
-      verificado: true,
-      fonte: "detalhe",
+      verified: true,
+      source: "detail",
     });
-    lead.score = scoreLead({ siteType: lead.tipo_site, reviews: lead.avaliacoes, rating: lead.nota, phone: lead.telefone });
+    lead.score = scoreLead({ siteType: lead.siteType, reviews: lead.reviews, rating: lead.rating, phone: lead.phone });
     touch(lead);
-    pushLog("verificado", lead);
+    pushLog("verified", lead);
     scheduleFlush();
     renderHud();
     const a = cardFor(lead.id);
@@ -349,19 +354,19 @@
     }, 500);
   }
 
-  // ---- verificação ----
+  // ---- capture all / click fallback ----
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const jitter = (min, max) => min + Math.random() * (max - min);
   const userBusy = () => Date.now() - lastInput < IDLE_MS;
 
-  async function waitDetailFor(id, nome, timeout = 6000) {
+  async function waitDetailFor(id, name, timeout = 6000) {
     const start = Date.now();
     let seen = null;
     let reclicked = false;
     while (Date.now() - start < timeout) {
       await sleep(150);
-      // o maps às vezes redesenha a lista e o clique se perde
+      // Maps sometimes redraws the list and the click gets lost
       if (!reclicked && Date.now() - start > 2000) {
         reclicked = true;
         cardFor(id)?.click();
@@ -369,34 +374,34 @@
       const d = parseDetail();
       if (!d) continue;
       seen = d;
-      if (d.id === id || d.nome === nome) {
-        await sleep(300); // site às vezes chega depois do endereço
+      if (d.id === id || d.name === name) {
+        await sleep(300); // the website sometimes renders after the address
         return parseDetail() || d;
       }
     }
-    debug("detalhe não abriu", { esperado: nome, id, painel: seen?.nome, idPainel: seen?.id, url: location.href.slice(0, 120) });
+    debug("detail did not open", { expected: name, id, pane: seen?.name, paneId: seen?.id });
     return null;
   }
 
   function nextUnverified() {
     return [...document.querySelectorAll(CARD_SELECTOR)].find((a) => {
       const lead = leads[idOf(a)];
-      const age = Date.now() - (Date.parse(lead?.capturado_em) || 0);
-      return lead && !lead.verificado && (lead.tentativas || 0) < MAX_TRIES && age > 8000;
+      const age = Date.now() - (Date.parse(lead?.capturedAt) || 0);
+      return lead && !lead.verified && (lead.attempts || 0) < MAX_ATTEMPTS && age > 8000;
     });
   }
 
-  // o google corta a lista quando acha que o uso está estranho
+  const END_OF_LIST_RE = /chegou ao final da lista|reached the end of the list/i;
+  // Google cuts the list short when it thinks usage looks automated
   const limitedView = () =>
     /visualiza[çc][ãa]o limitada|limited view of google maps/i.test(document.querySelector('[role="feed"]')?.innerText || "");
 
   async function loadMore() {
     const feed = document.querySelector('[role="feed"]');
-    if (!feed) return false;
-    if (/chegou ao final da lista|reached the end of the list/i.test(feed.innerText)) return false;
+    if (!feed || END_OF_LIST_RE.test(feed.innerText)) return false;
     const before = document.querySelectorAll(CARD_SELECTOR).length;
-    // o maps só pede o próximo lote quando sente a rolagem chegar no fim; rolar pro
-    // mesmo ponto de novo não conta, então de tempos em tempos sobe um pouco e volta
+    // Maps only asks for the next batch when it sees the scroll reach the bottom;
+    // scrolling to the same spot again doesn't count, so every so often nudge up and back
     for (let i = 0; i < 38; i++) {
       if (i % 6 === 5) {
         feed.scrollTop = Math.max(0, feed.scrollHeight - feed.clientHeight - 600);
@@ -406,8 +411,7 @@
       await sleep(400);
       scan();
       if (document.querySelectorAll(CARD_SELECTOR).length > before) return true;
-      if (/chegou ao final da lista|reached the end of the list/i.test(feed.innerText)) return false;
-      if (limitedView()) return false;
+      if (END_OF_LIST_RE.test(feed.innerText) || limitedView()) return false;
     }
     return false;
   }
@@ -416,7 +420,7 @@
   function kick() {
     clearTimeout(kickTimer);
     kickTimer = setTimeout(() => {
-      if (!running && capturing && !dead && (autoVerify || fullRun) && document.visibilityState === "visible") loop();
+      if (!running && capturing && !dead && (openCards || captureAll) && document.visibilityState === "visible") loop();
     }, 300);
   }
   document.addEventListener("visibilitychange", kick);
@@ -424,51 +428,48 @@
   async function loop() {
     running = true;
     renderHud();
-    while (!dead && capturing && (autoVerify || fullRun)) {
+    while (!dead && capturing && (openCards || captureAll)) {
       if (document.visibilityState !== "visible") break;
-      if (!fullRun && !(autoVerify && nextUnverified())) break;
+      if (!captureAll && !(openCards && nextUnverified())) break;
       if (!(await holdLock())) {
-        renderHud("outra aba do Maps está verificando");
+        renderHud(t("hudOtherTab"));
         await sleep(2000);
         continue;
       }
-      if (userBusy() && !fullRun) {
-        renderHud("esperando você parar de rolar");
+      if (userBusy() && !captureAll) {
+        renderHud(t("hudWaitScroll"));
         await sleep(400);
         continue;
       }
-      let a = autoVerify ? nextUnverified() : null;
+      const a = openCards ? nextUnverified() : null;
       if (!a) {
-        if (fullRun) renderHud("rolando a lista");
-        if (fullRun && limitedView()) {
-          renderHud("o Google limitou a lista, tente de novo mais tarde");
+        if (captureAll) renderHud(t("hudScrolling"));
+        if (captureAll && limitedView()) {
+          renderHud(t("hudLimited"));
           await sleep(4000);
           break;
         }
-        if (!fullRun || !(await loadMore())) {
-          // pode ter card que ainda não completou 4s; espera um pouco antes de desistir
-          if (autoVerify && Object.values(leads).some((l) => !l.verificado && (l.tentativas || 0) < MAX_TRIES)) {
+        if (!captureAll || !(await loadMore())) {
+          // some card may not have reached the 8s mark yet; wait a bit before giving up
+          if (openCards && Object.values(leads).some((l) => !l.verified && (l.attempts || 0) < MAX_ATTEMPTS)) {
             await sleep(1500);
             if (nextUnverified()) continue;
           }
           break;
         }
-        await sleep(jitter(1000, 2000)); // ritmo de gente, pra não levar limite do google
+        await sleep(jitter(1000, 2000)); // human-ish pace so Google doesn't limit the list
         continue;
       }
       const id = idOf(a);
-      const nome = leads[id].nome;
-      renderHud(`verificando ${nome}`);
-      if (fullRun) a.scrollIntoView({ block: "center" });
+      const name = leads[id].name;
+      renderHud(t("hudChecking", name));
+      if (captureAll) a.scrollIntoView({ block: "center" });
       a.click();
-      const d = await waitDetailFor(id, nome);
-      if (d && applyDetail(d)) {
-        stats.ok++;
-      } else {
-        stats.falhas++;
-        // sempre pelo id, a referência antiga pode ter sido trocada pela mescla
+      const d = await waitDetailFor(id, name);
+      if (!(d && applyDetail(d))) {
+        // always go through the id, the old reference may have been replaced by a merge
         if (leads[id]) {
-          leads[id].tentativas = (leads[id].tentativas || 0) + 1;
+          leads[id].attempts = (leads[id].attempts || 0) + 1;
           touch(leads[id]);
           markCard(a, leads[id]);
         }
@@ -478,14 +479,14 @@
     }
     running = false;
     releaseLock();
-    if (fullRun && !dead && !nextUnverified()) {
-      fullRun = false;
-      save({ [VERIFY_KEY]: false });
+    if (captureAll && !dead && !nextUnverified()) {
+      captureAll = false;
+      save({ [CAPTURE_ALL_KEY]: false });
     }
     renderHud();
   }
 
-  // ---- observer ----
+  // ---- DOM observer ----
 
   const observer = new MutationObserver((mutations) => {
     if (!alive()) return die();
@@ -507,15 +508,15 @@
     if (detail) checkDetail();
   });
 
-  // ---- HUD ----
+  // ---- on-page HUD ----
 
   function counts() {
     const all = Object.values(leads);
     return {
       total: all.length,
-      semSite: all.filter((l) => l.tipo_site === "nenhum").length,
-      social: all.filter((l) => l.tipo_site === "rede_social").length,
-      pendentes: all.filter((l) => !l.verificado && (l.tentativas || 0) < MAX_TRIES).length,
+      none: all.filter((l) => l.siteType === "none").length,
+      social: all.filter((l) => l.siteType === "social").length,
+      pending: all.filter((l) => !l.verified && (l.attempts || 0) < MAX_ATTEMPTS).length,
     };
   }
 
@@ -531,26 +532,34 @@
         const act = e.target.closest("[data-act]")?.dataset.act;
         if (!act) return;
         if (!alive()) return die();
-        if (act === "pause") save({ [STATE_KEY]: !capturing });
-        if (act === "all") save({ [VERIFY_KEY]: !fullRun });
+        if (act === "pause") save({ [CAPTURING_KEY]: !capturing });
+        if (act === "all") save({ [CAPTURE_ALL_KEY]: !captureAll });
       });
       document.body.appendChild(hud);
     }
     const c = counts();
     hud.className = !capturing ? "prsp-hud--paused" : running ? "prsp-hud--verify" : "";
-    const status = !capturing ? "Pausado" : running ? (fullRun ? "Capturando tudo" : "Verificando") : "Capturando";
-    const sub = !capturing ? "" : lastActivity || (c.pendentes ? "completando os que faltam" : "role a lista ou clique em capturar tudo");
+    const status = !capturing ? t("statusPaused") : running ? t(captureAll ? "statusCapturingAll" : "statusVerifying") : t("statusCapturing");
+    const sub = !capturing ? "" : lastActivity || t(c.pending ? "hudHintPending" : "hudHintIdle");
     hud.innerHTML = `
       <span class="prsp-hud__brand">Prospecta <em>v${VERSION}</em></span>
-      <span class="prsp-hud__status"><i></i>${status}<small></small></span>
-      <span class="prsp-hud__num"><b>${c.total}</b> leads</span>
-      <span class="prsp-hud__num prsp-hud__none"><b>${c.semSite}</b> sem site</span>
-      <span class="prsp-hud__num prsp-hud__social"><b>${c.social}</b> rede social</span>
-      <span class="prsp-hud__num prsp-hud__pending"><b>${c.pendentes}</b> a verificar</span>
-      <button data-act="all" type="button">${fullRun ? "Parar" : "Capturar tudo"}</button>
-      <button data-act="pause" type="button">${capturing ? "Pausar" : "Retomar"}</button>
+      <span class="prsp-hud__status"><i></i><span data-k="status"></span><small></small></span>
+      <span class="prsp-hud__num"><b>${c.total}</b> <span data-k="leads"></span></span>
+      <span class="prsp-hud__num prsp-hud__none"><b>${c.none}</b> <span data-k="none"></span></span>
+      <span class="prsp-hud__num prsp-hud__social"><b>${c.social}</b> <span data-k="social"></span></span>
+      <span class="prsp-hud__num prsp-hud__pending"><b>${c.pending}</b> <span data-k="pending"></span></span>
+      <button data-act="all" type="button"></button>
+      <button data-act="pause" type="button"></button>
     `;
-    // texto via textContent porque pode ter nome vindo do maps
+    // text goes in through textContent, place names come from Maps
+    const set = (sel, text) => (hud.querySelector(sel).textContent = text);
+    set('[data-k="status"]', status);
+    set('[data-k="leads"]', t("hudLeads"));
+    set('[data-k="none"]', t("hudNone"));
+    set('[data-k="social"]', t("hudSocial"));
+    set('[data-k="pending"]', t("hudPending"));
+    set('[data-act="all"]', t(captureAll ? "actionStop" : "actionCaptureAll"));
+    set('[data-act="pause"]', t(capturing ? "actionPause" : "actionResume"));
     const small = hud.querySelector("small");
     small.textContent = sub;
     small.hidden = !sub;

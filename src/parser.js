@@ -2,7 +2,11 @@
   const SOCIAL_RE =
     /(instagram\.com|facebook\.com|fb\.com|fb\.me|linktr\.ee|wa\.me|whatsapp\.com|api\.whatsapp|tiktok\.com|bio\.link|beacons\.ai|linkbio|taplink|contate\.me|lnk\.bio|linkr\.bio|msha\.ke|youtube\.com|twitter\.com|x\.com\/|kwai)/i;
   const PHONE_RE = /(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/;
-  const STATUS_RE = /^(aberto|fechado|abre|fecha|open|closed|opens|closes|temporariamente|permanentemente)/i;
+  // Maps UI text comes in the user's language, so these match Portuguese and English
+  const STATUS_RE = /^(aberto|fechado|abre|fecha|open|closed|opens|closes|temporariamente|permanentemente|temporarily|permanently)/i;
+  const SITE_LABEL_RE = /^(web\s?site|site)$|visitar o site|acessar o site|website/i;
+
+  const siteTypeOf = (url) => (!url ? "none" : SOCIAL_RE.test(url) ? "social" : "own");
 
   function resolveHref(href) {
     try {
@@ -40,8 +44,7 @@
   function parseNumber(str) {
     if (!str) return null;
     // "1.234" -> 1234, "4,6" -> 4.6
-    const clean = str.replace(/\./g, "").replace(",", ".");
-    const n = parseFloat(clean);
+    const n = parseFloat(str.replace(/\./g, "").replace(",", "."));
     return Number.isFinite(n) ? n : null;
   }
 
@@ -54,13 +57,13 @@
       const label = img.getAttribute("aria-label");
       const r = label.match(/(\d[,.]\d)/);
       if (r) rating = parseNumber(r[1]);
-      const rv = label.match(/(\d[\d.]*)\s*(avalia|coment|review)/i);
+      const rv = label.match(/(\d[\d.,]*)\s*(avalia|coment|review)/i);
       if (rv) reviews = parseNumber(rv[1]);
     }
 
     // fallback: "4,6(1.234)"
     if (rating === null || reviews === null) {
-      const m = text.match(/(\d[,.]\d)\s*\(([\d.]+)\)/);
+      const m = text.match(/(\d[,.]\d)\s*\(([\d.,]+)\)/);
       if (m) {
         if (rating === null) rating = parseNumber(m[1]);
         if (reviews === null) reviews = parseNumber(m[2]);
@@ -69,31 +72,26 @@
     return { rating, reviews: reviews ?? 0 };
   }
 
-  const SITE_LABEL_RE = /^(web\s?site|site)$|visitar o site|acessar o site|website/i;
-
   function parseWebsite(card) {
     const links = [...card.querySelectorAll("a[href]")]
       .map((a) => resolveHref(a.href))
       .filter((h) => /^https?:/i.test(h) && !isGoogleInternal(h));
+    if (links.length) return { site: links[0], siteType: siteTypeOf(links[0]) };
 
     const siteButton = [...card.querySelectorAll("a, button")].find((el) => {
       const label = `${el.getAttribute("data-value") || ""} ${el.getAttribute("aria-label") || ""}`.trim();
       return label && SITE_LABEL_RE.test(label);
     });
-
-    if (links.length) {
-      const site = links[0];
-      return { site, siteType: SOCIAL_RE.test(site) ? "rede_social" : "proprio" };
-    }
     if (siteButton) {
       const href = siteButton.href ? resolveHref(siteButton.href) : "";
-      return { site: href, siteType: href && SOCIAL_RE.test(href) ? "rede_social" : "proprio" };
+      return { site: href, siteType: href ? siteTypeOf(href) : "own" };
     }
 
+    // only call it "none" when the card shows its action buttons and none is a website
     const hasActionButtons = card.querySelector(
-      'a[data-value], button[data-value], [aria-label*="Rotas" i], [aria-label*="Directions" i], [aria-label*="Ligar" i]'
+      'a[data-value], button[data-value], [aria-label*="Rotas" i], [aria-label*="Directions" i], [aria-label*="Ligar" i], [aria-label*="Call" i]'
     );
-    return { site: "", siteType: hasActionButtons ? "nenhum" : "nao_verificado" };
+    return { site: "", siteType: hasActionButtons ? "none" : "unverified" };
   }
 
   function parseCategoryAddress(lines, name) {
@@ -103,18 +101,18 @@
       const parts = line
         .split("·")
         .map((s) => s.trim())
-        .filter((s) => s && !/^[\u2000-\u2BFF\uE000-\uF8FF]+$/.test(s)); // icones do maps
-      if (parts.length === 0) continue;
-      return { category: parts[0] || "", address: parts[1] || "" };
+        .filter((s) => s && !/^[ -⯿-]+$/.test(s)); // Maps icon glyphs
+      if (parts.length) return { category: parts[0] || "", address: parts[1] || "" };
     }
     return { category: "", address: "" };
   }
 
+  // a good lead has no website of its own but already has traction
   function scoreLead({ siteType, reviews, rating, phone }) {
     let score = 0;
-    if (siteType === "nenhum") score += 40;
-    else if (siteType === "rede_social") score += 35;
-    else if (siteType === "nao_verificado") score += 15;
+    if (siteType === "none") score += 40;
+    else if (siteType === "social") score += 35;
+    else if (siteType === "unverified") score += 15;
 
     score += Math.min(35, Math.log10((reviews || 0) + 1) * 14);
 
@@ -125,7 +123,7 @@
     return Math.round(Math.min(100, score));
   }
 
-  // com o detalhe aberto a url vira /maps/place/, então guarda a última busca
+  // once a place is open the URL becomes /maps/place/, so remember the last search
   let lastSearch = "";
   function searchTerm() {
     const m = location.pathname.match(/\/maps\/search\/([^/@]+)/);
@@ -149,46 +147,54 @@
     const { rating, reviews } = parseRating(card, text);
     const { site, siteType } = parseWebsite(card);
     const { category, address } = parseCategoryAddress(lines, name);
-    const phoneMatch = text.match(PHONE_RE);
-    const phone = phoneMatch ? phoneMatch[0].trim() : "";
+    const phone = (text.match(PHONE_RE) || [""])[0].trim();
 
     const lead = {
       id: placeKey(anchor.href),
-      nome: name,
-      categoria: category,
-      endereco: address,
-      telefone: phone,
-      nota: rating,
-      avaliacoes: reviews,
+      name,
+      category,
+      address,
+      phone,
+      rating,
+      reviews,
       site,
-      tipo_site: siteType,
-      busca: searchTerm(),
-      link_maps: anchor.href.split("?")[0],
+      siteType,
+      query: searchTerm(),
+      mapsUrl: anchor.href.split("?")[0],
       ...coords(anchor.href),
-      capturado_em: new Date().toISOString(),
+      capturedAt: new Date().toISOString(),
     };
     lead.score = scoreLead({ siteType, reviews, rating, phone });
     return lead;
   }
 
-  const DAYS = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"];
+  const DAYS = [
+    ["mon", "segunda", "monday"],
+    ["tue", "terça", "tuesday"],
+    ["wed", "quarta", "wednesday"],
+    ["thu", "quinta", "thursday"],
+    ["fri", "sexta", "friday"],
+    ["sat", "sábado", "saturday"],
+    ["sun", "domingo", "sunday"],
+  ];
 
-  // a tabela de horário vem como "quinta-feira, 08:00 a 20:00, Copiar horário..."
+  // the hours table comes as "quinta-feira, 08:00 a 20:00, Copiar horário..."
   function parseHours(scope) {
     const byDay = {};
     scope.querySelectorAll("[aria-label]").forEach((el) => {
       const parts = el.getAttribute("aria-label").split(",").map((p) => p.trim());
-      const day = DAYS.find((d) => parts[0].toLowerCase().startsWith(d));
-      if (day && parts[1] && !byDay[day]) byDay[day] = parts[1];
+      const first = parts[0].toLowerCase();
+      const day = DAYS.find(([, pt, en]) => first.startsWith(pt) || first.startsWith(en));
+      if (day && parts[1] && !byDay[day[0]]) byDay[day[0]] = parts[1];
     });
-    return DAYS.filter((d) => byDay[d])
-      .map((d) => `${d.slice(0, 3)} ${byDay[d]}`)
+    return DAYS.filter(([key]) => byDay[key])
+      .map(([key, pt]) => `${pt.slice(0, 3)} ${byDay[key]}`)
       .join(" · ");
   }
 
-  // painel de detalhes que abre ao clicar no card; é o único lugar com o site
+  // the detail pane that opens when a card is clicked
   function parseDetail() {
-    // negócio sem endereço (delivery, atende em casa) não tem o item "address"
+    // places without an address (delivery, home service) have no "address" item
     const address = document.querySelector('[data-item-id="address"]');
     const pane =
       address?.closest('[role="main"]') ||
@@ -196,38 +202,34 @@
         (m) => !m.querySelector('[role="feed"]') && m.querySelector("[data-item-id]")
       );
     if (!pane) return null;
-    const nome = (pane?.getAttribute("aria-label") || "").trim();
+    const name = (pane.getAttribute("aria-label") || "").trim();
     const idMatch = location.href.match(/!1s([^!?]+)/);
-    if (!nome || !idMatch) return null;
+    if (!name || !idMatch) return null;
 
-    const scope = pane || document;
-    const authority = scope.querySelector('a[data-item-id="authority"]');
+    const authority = pane.querySelector('a[data-item-id="authority"]');
     const site = authority ? resolveHref(authority.href) : "";
-    const phoneEl = scope.querySelector('[data-item-id^="phone:tel:"]');
-    let telefone = "";
+    const phoneEl = pane.querySelector('[data-item-id^="phone:tel:"]');
+    let phone = "";
     if (phoneEl) {
       const label = phoneEl.getAttribute("aria-label") || phoneEl.innerText || "";
-      telefone = (label.match(PHONE_RE) || [""])[0].trim() || phoneEl.getAttribute("data-item-id").replace("phone:tel:", "");
+      phone = (label.match(PHONE_RE) || [""])[0].trim() || phoneEl.getAttribute("data-item-id").replace("phone:tel:", "");
     }
-
-    const endereco = (address?.getAttribute("aria-label") || "").replace(/^Endereço:\s*/i, "").trim();
-    const horario = parseHours(scope);
 
     return {
       id: decodeURIComponent(idMatch[1]),
-      nome,
-      endereco,
-      horario,
+      name,
+      address: (address?.getAttribute("aria-label") || "").replace(/^(Endereço|Address):\s*/i, "").trim(),
+      hours: parseHours(pane),
       ...coords(location.href),
       site,
-      tipo_site: !site ? "nenhum" : SOCIAL_RE.test(site) ? "rede_social" : "proprio",
-      telefone,
+      siteType: siteTypeOf(site),
+      phone,
     };
   }
 
-  // ---- lotes da busca ----
-  // o maps baixa os resultados de 20 em 20 por /search?tbm=map; cada lote já traz
-  // site, telefone e endereço, então dá pra classificar sem abrir card nenhum
+  // ---- search batches ----
+  // Maps loads results 20 at a time through /search?tbm=map, and every batch already
+  // carries website, phone and address, so places can be classified without a click
 
   const at = (o, ...keys) => {
     try {
@@ -265,12 +267,12 @@
     let data;
     try {
       data = JSON.parse(stripXssi(text));
-      // o primeiro lote vem embrulhado em {c, d}, os seguintes não
+      // the first batch is wrapped in {c, d}, the following ones are not
       if (data && !Array.isArray(data) && typeof data.d === "string") data = JSON.parse(stripXssi(data.d));
     } catch {
       return [];
     }
-    const busca = searchTerm();
+    const query = searchTerm();
     return findResultList(data)
       .map((r) => r?.[1])
       .filter((p) => isPlaceId(at(p, 10)) && at(p, 11))
@@ -285,32 +287,32 @@
             site = rawSite;
           }
         }
-        const telefone = at(p, 178, 0, 0) || "";
-        const nota = typeof at(p, 4, 7) === "number" ? at(p, 4, 7) : null;
-        const avaliacoes = typeof at(p, 4, 8) === "number" ? at(p, 4, 8) : 0;
-        const tipo_site = !site ? "nenhum" : SOCIAL_RE.test(site) ? "rede_social" : "proprio";
+        const phone = at(p, 178, 0, 0) || "";
+        const rating = typeof at(p, 4, 7) === "number" ? at(p, 4, 7) : null;
+        const reviews = typeof at(p, 4, 8) === "number" ? at(p, 4, 8) : 0;
+        const siteType = siteTypeOf(site);
         const lead = {
           id,
-          nome: p[11],
-          categoria: at(p, 13, 0) || "",
-          endereco: at(p, 39) || "",
-          telefone,
-          nota,
-          avaliacoes,
+          name: p[11],
+          category: at(p, 13, 0) || "",
+          address: at(p, 39) || "",
+          phone,
+          rating,
+          reviews,
           site,
-          tipo_site,
-          busca,
-          link_maps: cidLink(id),
+          siteType,
+          query,
+          mapsUrl: cidLink(id),
           lat: at(p, 9, 2) ?? null,
           lng: at(p, 9, 3) ?? null,
-          verificado: true,
-          fonte: "lote",
-          capturado_em: new Date().toISOString(),
+          verified: true,
+          source: "batch",
+          capturedAt: new Date().toISOString(),
         };
-        lead.score = scoreLead({ siteType: tipo_site, reviews: avaliacoes, rating: nota, phone: telefone });
+        lead.score = scoreLead({ siteType, reviews, rating, phone });
         return lead;
       });
   }
 
-  window.ProspectaParser = { parseCard, parseDetail, parseSearchBody, scoreLead, placeKey, VERSION: "1.4.1" };
+  window.ProspectaParser = { parseCard, parseDetail, parseSearchBody, scoreLead, placeKey, VERSION: "1.5.0" };
 })();

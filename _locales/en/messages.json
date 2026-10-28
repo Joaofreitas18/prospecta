@@ -1,0 +1,290 @@
+{
+  "extDescription": {
+    "message": "Finds Google Maps businesses without a website as you scroll the results and exports them to CSV."
+  },
+  "actionTitle": {
+    "message": "Prospecta - open panel"
+  },
+  "badgeTitle": {
+    "message": "Prospecta - {0} leads, {1} without a website"
+  },
+  "badgeTitlePaused": {
+    "message": "Prospecta - {0} leads, {1} without a website (paused)"
+  },
+  "statusCapturing": {
+    "message": "Capturing"
+  },
+  "statusCapturingAll": {
+    "message": "Capturing all"
+  },
+  "statusVerifying": {
+    "message": "Checking"
+  },
+  "statusPaused": {
+    "message": "Paused"
+  },
+  "pauseCapture": {
+    "message": "Pause capture"
+  },
+  "resumeCapture": {
+    "message": "Resume capture"
+  },
+  "actionCaptureAll": {
+    "message": "Capture all"
+  },
+  "actionStop": {
+    "message": "Stop"
+  },
+  "actionPause": {
+    "message": "Pause"
+  },
+  "actionResume": {
+    "message": "Resume"
+  },
+  "hudLeads": {
+    "message": "leads"
+  },
+  "hudNone": {
+    "message": "no website"
+  },
+  "hudSocial": {
+    "message": "social only"
+  },
+  "hudPending": {
+    "message": "pending"
+  },
+  "hudHintPending": {
+    "message": "filling in the missing ones"
+  },
+  "hudHintIdle": {
+    "message": "scroll the list or click capture all"
+  },
+  "hudOtherTab": {
+    "message": "another Maps tab is checking"
+  },
+  "hudWaitScroll": {
+    "message": "waiting for you to stop scrolling"
+  },
+  "hudScrolling": {
+    "message": "scrolling the list"
+  },
+  "hudLimited": {
+    "message": "Google limited the list, try again later"
+  },
+  "hudChecking": {
+    "message": "checking {0}"
+  },
+  "badgeNone": {
+    "message": "NO WEBSITE"
+  },
+  "badgeSocial": {
+    "message": "SOCIAL ONLY"
+  },
+  "badgeUnverified": {
+    "message": "CHECKING…"
+  },
+  "badgeOwn": {
+    "message": "HAS WEBSITE"
+  },
+  "badgeFailed": {
+    "message": "COULDN'T OPEN"
+  },
+  "leadsCaptured": {
+    "message": "leads captured"
+  },
+  "typeNone": {
+    "message": "No website"
+  },
+  "typeSocial": {
+    "message": "Social media"
+  },
+  "legendSocial": {
+    "message": "Social only"
+  },
+  "typeUnverified": {
+    "message": "Pending"
+  },
+  "typeOwn": {
+    "message": "Own website"
+  },
+  "openCardsTitle": {
+    "message": "Open cards to fill gaps"
+  },
+  "openCardsHelp": {
+    "message": "Off: only reads the result batches Maps loads, no clicking. On: opens the cards that come back incomplete."
+  },
+  "captureAllTitle": {
+    "message": "Scrolls to the end of the list and reads every batch"
+  },
+  "tabLive": {
+    "message": "Live"
+  },
+  "tabBest": {
+    "message": "Top"
+  },
+  "tabExport": {
+    "message": "Export"
+  },
+  "feedEmpty": {
+    "message": "Open a search on Google Maps and scroll the list.\nResults show up here in real time."
+  },
+  "rankEmpty": {
+    "message": "No leads match the current filters."
+  },
+  "filterType": {
+    "message": "Website type"
+  },
+  "filterNoSite": {
+    "message": "No own website"
+  },
+  "filterNone": {
+    "message": "No website at all"
+  },
+  "filterAll": {
+    "message": "All"
+  },
+  "minReviews": {
+    "message": "Minimum reviews"
+  },
+  "minScore": {
+    "message": "Minimum score"
+  },
+  "exportHint": {
+    "message": "{0} of {1} leads match these filters."
+  },
+  "noLeadsYet": {
+    "message": "No leads captured yet."
+  },
+  "exportCsv": {
+    "message": "Export CSV"
+  },
+  "clearData": {
+    "message": "Clear data"
+  },
+  "clearConfirm": {
+    "message": "Delete the {0} captured leads and the log? This can't be undone."
+  },
+  "back": {
+    "message": "Back"
+  },
+  "sheetTitle": {
+    "message": "Business"
+  },
+  "scoreLabel": {
+    "message": "score"
+  },
+  "openInMaps": {
+    "message": "Open in Maps"
+  },
+  "directions": {
+    "message": "Directions"
+  },
+  "viewDetails": {
+    "message": "View details"
+  },
+  "feedVerified": {
+    "message": "✓ checked"
+  },
+  "feedCaptured": {
+    "message": "captured"
+  },
+  "reviewsShort": {
+    "message": "{0} reviews"
+  },
+  "reviewsLong": {
+    "message": "{0} reviews"
+  },
+  "mapOf": {
+    "message": "Map of {0}"
+  },
+  "noLocation": {
+    "message": "Location not captured yet"
+  },
+  "fieldAddress": {
+    "message": "Address"
+  },
+  "fieldPhone": {
+    "message": "Phone"
+  },
+  "fieldWebsite": {
+    "message": "Website"
+  },
+  "fieldHours": {
+    "message": "Hours"
+  },
+  "fieldQuery": {
+    "message": "Search"
+  },
+  "fieldCaptured": {
+    "message": "Captured"
+  },
+  "notProvided": {
+    "message": "not provided"
+  },
+  "noWebsite": {
+    "message": "no website"
+  },
+  "notVerified": {
+    "message": "not checked yet"
+  },
+  "copy": {
+    "message": "copy"
+  },
+  "copied": {
+    "message": "copied"
+  },
+  "yes": {
+    "message": "yes"
+  },
+  "no": {
+    "message": "no"
+  },
+  "csvScore": {
+    "message": "Score"
+  },
+  "csvName": {
+    "message": "Name"
+  },
+  "csvCategory": {
+    "message": "Category"
+  },
+  "csvPhone": {
+    "message": "Phone"
+  },
+  "csvAddress": {
+    "message": "Address"
+  },
+  "csvRating": {
+    "message": "Rating"
+  },
+  "csvReviews": {
+    "message": "Reviews"
+  },
+  "csvSiteType": {
+    "message": "Website type"
+  },
+  "csvVerified": {
+    "message": "Checked"
+  },
+  "csvWebsite": {
+    "message": "Website"
+  },
+  "csvHours": {
+    "message": "Hours"
+  },
+  "csvLat": {
+    "message": "Latitude"
+  },
+  "csvLng": {
+    "message": "Longitude"
+  },
+  "csvQuery": {
+    "message": "Search"
+  },
+  "csvMapsUrl": {
+    "message": "Maps link"
+  },
+  "csvCapturedAt": {
+    "message": "Captured at"
+  }
+}

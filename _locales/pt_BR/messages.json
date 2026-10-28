@@ -1,0 +1,290 @@
+{
+  "extDescription": {
+    "message": "Prospecção de clientes no Google Maps: captura empresas enquanto você rola a lista, identifica quem não tem site e exporta em CSV."
+  },
+  "actionTitle": {
+    "message": "Prospecta - abrir painel"
+  },
+  "badgeTitle": {
+    "message": "Prospecta - {0} leads, {1} sem site próprio"
+  },
+  "badgeTitlePaused": {
+    "message": "Prospecta - {0} leads, {1} sem site próprio (pausado)"
+  },
+  "statusCapturing": {
+    "message": "Capturando"
+  },
+  "statusCapturingAll": {
+    "message": "Capturando tudo"
+  },
+  "statusVerifying": {
+    "message": "Verificando"
+  },
+  "statusPaused": {
+    "message": "Pausado"
+  },
+  "pauseCapture": {
+    "message": "Pausar captura"
+  },
+  "resumeCapture": {
+    "message": "Retomar captura"
+  },
+  "actionCaptureAll": {
+    "message": "Capturar tudo"
+  },
+  "actionStop": {
+    "message": "Parar"
+  },
+  "actionPause": {
+    "message": "Pausar"
+  },
+  "actionResume": {
+    "message": "Retomar"
+  },
+  "hudLeads": {
+    "message": "leads"
+  },
+  "hudNone": {
+    "message": "sem site"
+  },
+  "hudSocial": {
+    "message": "rede social"
+  },
+  "hudPending": {
+    "message": "a verificar"
+  },
+  "hudHintPending": {
+    "message": "completando os que faltam"
+  },
+  "hudHintIdle": {
+    "message": "role a lista ou clique em capturar tudo"
+  },
+  "hudOtherTab": {
+    "message": "outra aba do Maps está verificando"
+  },
+  "hudWaitScroll": {
+    "message": "esperando você parar de rolar"
+  },
+  "hudScrolling": {
+    "message": "rolando a lista"
+  },
+  "hudLimited": {
+    "message": "o Google limitou a lista, tente de novo mais tarde"
+  },
+  "hudChecking": {
+    "message": "verificando {0}"
+  },
+  "badgeNone": {
+    "message": "SEM SITE"
+  },
+  "badgeSocial": {
+    "message": "SÓ REDE SOCIAL"
+  },
+  "badgeUnverified": {
+    "message": "VERIFICANDO…"
+  },
+  "badgeOwn": {
+    "message": "TEM SITE"
+  },
+  "badgeFailed": {
+    "message": "NÃO ABRIU"
+  },
+  "leadsCaptured": {
+    "message": "leads capturados"
+  },
+  "typeNone": {
+    "message": "Sem site"
+  },
+  "typeSocial": {
+    "message": "Rede social"
+  },
+  "legendSocial": {
+    "message": "Só rede social"
+  },
+  "typeUnverified": {
+    "message": "A verificar"
+  },
+  "typeOwn": {
+    "message": "Site próprio"
+  },
+  "openCardsTitle": {
+    "message": "Completar abrindo cards"
+  },
+  "openCardsHelp": {
+    "message": "Desligado, só lê os lotes do Maps, sem clicar. Ligado, abre os cards que vierem faltando."
+  },
+  "captureAllTitle": {
+    "message": "Rola a lista até o fim e captura todos os lotes"
+  },
+  "tabLive": {
+    "message": "Ao vivo"
+  },
+  "tabBest": {
+    "message": "Melhores"
+  },
+  "tabExport": {
+    "message": "Exportar"
+  },
+  "feedEmpty": {
+    "message": "Abra uma busca no Google Maps e role a lista.\nAs capturas aparecem aqui em tempo real."
+  },
+  "rankEmpty": {
+    "message": "Nenhum lead passa nos filtros atuais."
+  },
+  "filterType": {
+    "message": "Tipo de site"
+  },
+  "filterNoSite": {
+    "message": "Sem site próprio"
+  },
+  "filterNone": {
+    "message": "Só sem site"
+  },
+  "filterAll": {
+    "message": "Todos"
+  },
+  "minReviews": {
+    "message": "Avaliações mínimas"
+  },
+  "minScore": {
+    "message": "Score mínimo"
+  },
+  "exportHint": {
+    "message": "{0} de {1} leads entram no CSV com esses filtros."
+  },
+  "noLeadsYet": {
+    "message": "Nenhum lead capturado ainda."
+  },
+  "exportCsv": {
+    "message": "Exportar CSV"
+  },
+  "clearData": {
+    "message": "Limpar dados"
+  },
+  "clearConfirm": {
+    "message": "Apagar os {0} leads capturados e o log? Isso não pode ser desfeito."
+  },
+  "back": {
+    "message": "Voltar"
+  },
+  "sheetTitle": {
+    "message": "Estabelecimento"
+  },
+  "scoreLabel": {
+    "message": "score"
+  },
+  "openInMaps": {
+    "message": "Abrir no Maps"
+  },
+  "directions": {
+    "message": "Rotas"
+  },
+  "viewDetails": {
+    "message": "Ver detalhes"
+  },
+  "feedVerified": {
+    "message": "✓ verificado"
+  },
+  "feedCaptured": {
+    "message": "capturado"
+  },
+  "reviewsShort": {
+    "message": "{0} aval."
+  },
+  "reviewsLong": {
+    "message": "{0} avaliações"
+  },
+  "mapOf": {
+    "message": "Mapa de {0}"
+  },
+  "noLocation": {
+    "message": "Localização ainda não capturada"
+  },
+  "fieldAddress": {
+    "message": "Endereço"
+  },
+  "fieldPhone": {
+    "message": "Telefone"
+  },
+  "fieldWebsite": {
+    "message": "Site"
+  },
+  "fieldHours": {
+    "message": "Horário"
+  },
+  "fieldQuery": {
+    "message": "Busca"
+  },
+  "fieldCaptured": {
+    "message": "Capturado"
+  },
+  "notProvided": {
+    "message": "não informado"
+  },
+  "noWebsite": {
+    "message": "não tem site"
+  },
+  "notVerified": {
+    "message": "ainda não verificado"
+  },
+  "copy": {
+    "message": "copiar"
+  },
+  "copied": {
+    "message": "copiado"
+  },
+  "yes": {
+    "message": "sim"
+  },
+  "no": {
+    "message": "não"
+  },
+  "csvScore": {
+    "message": "Score"
+  },
+  "csvName": {
+    "message": "Nome"
+  },
+  "csvCategory": {
+    "message": "Categoria"
+  },
+  "csvPhone": {
+    "message": "Telefone"
+  },
+  "csvAddress": {
+    "message": "Endereço"
+  },
+  "csvRating": {
+    "message": "Nota"
+  },
+  "csvReviews": {
+    "message": "Avaliações"
+  },
+  "csvSiteType": {
+    "message": "Tipo de site"
+  },
+  "csvVerified": {
+    "message": "Verificado"
+  },
+  "csvWebsite": {
+    "message": "Site"
+  },
+  "csvHours": {
+    "message": "Horário"
+  },
+  "csvLat": {
+    "message": "Latitude"
+  },
+  "csvLng": {
+    "message": "Longitude"
+  },
+  "csvQuery": {
+    "message": "Busca"
+  },
+  "csvMapsUrl": {
+    "message": "Link Maps"
+  },
+  "csvCapturedAt": {
+    "message": "Capturado em"
+  }
+}

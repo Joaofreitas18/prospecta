@@ -1,58 +1,74 @@
 # Prospecta
 
-Extensão pro Chrome que pega as empresas do Google Maps enquanto você rola a lista de resultados e mostra quem não tem site. Dá pra exportar tudo em CSV.
+Chrome extension that captures Google Maps businesses while you scroll the results and flags the ones without a website. Everything can be exported to CSV.
 
-Fiz pra prospectar cliente sem ficar abrindo card por card. Ela aproveita os lotes de resultado que o próprio Maps baixa enquanto você usa, sem API nem chave.
+I built it to prospect clients for websites without opening listings one by one. It uses the result batches Maps already loads while you browse, no API key needed.
 
-## Como funciona
+## How it works
 
-Você faz uma busca no Maps (`google.com/maps` ou `google.com.br/maps`, tipo `barbearia são luís`) e vai rolando. Cada card que aparece entra na lista com nome, nota, avaliações e categoria.
+Search on Maps (`google.com/maps` or `google.com.br/maps`, e.g. `barber shop são luís`) and scroll the list.
 
-O card da lista não mostra o site, mas o Maps baixa os resultados de 20 em 20 e cada lote já vem com site, telefone, endereço e coordenadas de todo mundo. A extensão lê esses lotes no momento em que chegam, então não precisa clicar em nada:
+The list cards don't show the website, but Maps loads results 20 at a time and each batch already carries the website, phone, address and coordinates of every place. The extension reads each batch as it arrives, so nothing has to be clicked:
 
-- **rolando você mesmo**: cada lote que o Maps carrega entra classificado na hora
-- **Capturar tudo**: a extensão rola a lista sozinha até o fim, com uma pausa curta entre os lotes. Uma busca inteira (uns 120 resultados) leva uns 25 segundos
+- **scrolling yourself**: every batch Maps loads is classified right away
+- **Capture all**: the extension scrolls to the end of the list on its own, with a short pause between batches. A full search (around 120 results) takes about 25 seconds
 
-Cada lote que o Maps baixa é relido uma vez pela extensão (uma requisição a mais a cada 20 resultados). Se algum lead não vier no lote, dá pra ligar no painel a opção de abrir o card dele pra completar. Vem desligada.
+Each batch Maps loads is read once more by the extension (one extra request every 20 results). If a place comes back incomplete, the panel has an option to open its card and fill in the gaps. It's off by default.
 
-Depois de verificado, o lead fica como:
+Every place ends up as:
 
-- **sem site**: não tem site cadastrado
-- **rede social**: o "site" é Instagram, Linktree, wa.me etc
-- **site próprio**: tem domínio
+- **no website**: nothing registered
+- **social only**: the "website" is Instagram, Linktree, wa.me and so on
+- **own website**: has a domain
 
-Cada lead ganha um score de 0 a 100. A ideia é priorizar quem não tem site mas já tem movimento (muita avaliação, nota boa, telefone). Negócio sem site e com 3 avaliações não vale a ligação. A conta fica em `scoreLead()` no `src/parser.js`.
+Each lead gets a score from 0 to 100. The idea is to rank first the places with no website that already have traction (many reviews, good rating, a phone number). A business with no website and 3 reviews isn't worth the call. The formula lives in `scoreLead()` in `src/parser.js`.
 
-O ícone da extensão abre um painel lateral com as capturas ao vivo, os melhores leads e a exportação. Clicando no nome de um lead abre a ficha dele, com mapa, endereço, telefone, site, horário e atalho de rotas. O número no ícone é a quantidade de leads sem site próprio.
+The toolbar icon opens a side panel with the live feed, the top leads and the export. Clicking a lead opens its detail sheet with a map, address, phone, website, opening hours and a directions shortcut. The number on the icon is how many leads have no website of their own.
 
-A versão aparece no painel e na barrinha da página do Maps. Se depois de atualizar o número não mudou, o Chrome ainda está carregando a pasta antiga.
+The interface follows the browser language (English and Brazilian Portuguese for now, strings in `_locales/`).
 
-## Instalar
+## Install
 
-1. Clona ou baixa o repo
-2. Abre `chrome://extensions` e liga o modo do desenvolvedor
-3. **Carregar sem compactação** e seleciona a pasta
+1. Clone or download the repo
+2. Open `chrome://extensions` and turn on developer mode
+3. **Load unpacked** and pick the folder
 
-Precisa do Chrome 116+ por causa do painel lateral.
+Requires Chrome 116+ for the side panel.
 
 ## CSV
 
-Separado por `;` com BOM, abre direto no Excel. Colunas: score, nome, categoria, telefone, endereço, nota, avaliações, tipo de site, verificado, site, horário, latitude, longitude, busca, link do Maps e data da captura.
+UTF-8 with BOM so Excel opens it directly. The separator follows the system locale: `;` where the decimal mark is a comma, `,` otherwise. Columns: score, name, category, phone, address, rating, reviews, website type, checked, website, hours, latitude, longitude, search, Maps link and capture date.
 
-O Maps mostra no máximo uns 120 resultados por busca, então vale buscar por bairro. Os leads vão acumulando entre buscas e não duplicam.
+Maps shows at most around 120 results per search, so searching by neighborhood works better. Leads accumulate across searches without duplicates.
 
-## Problemas conhecidos
+## Project layout
 
-- O Google muda o HTML do Maps sem avisar. O parser usa atributos ARIA e texto em vez de classe CSS pra quebrar menos, mas uma hora quebra. Quando acontecer, o ajuste é no `src/parser.js`.
-- Se você recarregar a extensão com o Maps aberto, ela tenta se reconectar sozinha. Se o contador na página ficar vermelho, é só dar F5.
-- O formato dos lotes não é documentado. Se o Google mudar, a leitura fica em `parseSearchBody()` no `src/parser.js`, e enquanto isso dá pra ligar o modo de abrir card por card no painel, que é mais lento (uns 3 segundos por lead).
-- Se o Google achar o uso estranho, ele corta a lista e mostra "Esta é uma visualização limitada do Google Maps". A extensão para quando vê isso. Usar logado na sua conta e não rodar dezenas de buscas seguidas ajuda.
-- Com várias abas do Maps abertas, só a aba que está na frente abre cards. Os lotes são lidos em todas.
+```
+prospecta/
+├── manifest.json        # Manifest V3
+├── _locales/            # UI strings (en, pt_BR)
+├── src/
+│   ├── parser.js        # Reads list cards, the detail pane and the search batches; scoring
+│   ├── content.js       # Watches the page, merges data across tabs, on-page HUD
+│   ├── content.css      # Card badges and HUD
+│   └── background.js    # Side panel, icon counter, data migration
+├── popup/               # Side panel (live feed, top leads, export, detail sheet)
+├── icons/
+└── fonts/               # Manrope and JetBrains Mono
+```
 
-## Aviso
+## Known issues
 
-Os termos do Google Maps não permitem extração automatizada, então isso aqui é pra estudo e prospecção manual. Pra usar em escala o caminho é a [Places API](https://developers.google.com/maps/documentation/places/web-service). E se for entrar em contato com MEI ou autônomo, lembra que é dado pessoal pela LGPD.
+- Google changes the Maps HTML without notice. The parser relies on ARIA attributes and visible text instead of CSS classes so it breaks less often, but it will break eventually. The fix goes in `src/parser.js`.
+- The batch format isn't documented either. If Google changes it, the reading happens in `parseSearchBody()` in `src/parser.js`. Meanwhile the open-cards mode in the panel still works, just slower (about 3 seconds per place).
+- If Google thinks usage looks automated, it cuts the list and shows "This is a limited view of Google Maps". The extension stops when it sees that. Being signed in and not running dozens of searches in a row helps.
+- If you reload the extension with Maps open, it tries to reconnect on its own. If the on-page HUD turns red, reload the page.
+- With several Maps tabs open, only the tab in front opens cards. Batches are read in all of them.
 
-## Licença
+## Disclaimer
 
-MIT. As fontes Manrope e JetBrains Mono são OFL, licenças na pasta `fonts/`.
+The Google Maps Terms of Service don't allow automated extraction, so this is meant for learning and small-scale manual prospecting. For anything at scale, use the [Places API](https://developers.google.com/maps/documentation/places/web-service). Contact details of sole proprietors are personal data under Brazil's LGPD (and the GDPR elsewhere): contact them with a legitimate purpose, offer an opt-out and don't resell the list.
+
+## License
+
+MIT. Manrope and JetBrains Mono are under the OFL, licenses in `fonts/`.
