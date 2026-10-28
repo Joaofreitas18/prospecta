@@ -1,5 +1,5 @@
 (() => {
-  const { parseCard, parseDetail, scoreLead, VERSION } = window.ProspectaParser;
+  const { parseCard, parseDetail, parseSearchBody, scoreLead, VERSION } = window.ProspectaParser;
   const STORE_KEY = "leads";
   const STATE_KEY = "capturing";
   const VERIFY_KEY = "verifying";
@@ -203,7 +203,14 @@
       pushLog("novo", lead);
       scheduleFlush();
       renderHud();
+      scheduleFallback();
       kick();
+      setTimeout(kick, 4500); // o clique de reserva só vale depois de 4s
+    } else if (existing.fonte === "lote" && !existing.link_maps?.includes("/place/")) {
+      // o lote chegou antes do card; troca o link curto pelo do card
+      existing.link_maps = lead.link_maps;
+      touch(existing);
+      scheduleFlush();
     } else if (!existing.verificado && ((!existing.nota && lead.nota) || (!existing.categoria && lead.categoria))) {
       leads[lead.id] = touch({ ...existing, ...lead, capturado_em: existing.capturado_em });
       scheduleFlush();
@@ -231,6 +238,75 @@
     );
   }
 
+  // ---- lotes (sem clique) ----
+
+  const seenBatches = new Set();
+  const normUrl = (u) => {
+    try {
+      return new URL(u, location.href).href;
+    } catch {
+      return u;
+    }
+  };
+
+  function ingestBatch(places) {
+    if (!capturing || dead || !places.length) return;
+    let changed = 0;
+    for (const p of places) {
+      const ex = leads[p.id];
+      if (ex?.verificado && ex.fonte === "detalhe") continue; // o detalhe é mais completo
+      const merged = {
+        ...ex,
+        ...p,
+        busca: ex?.busca || p.busca,
+        capturado_em: ex?.capturado_em || p.capturado_em,
+        link_maps: ex?.link_maps?.includes("/place/") ? ex.link_maps : p.link_maps,
+        horario: ex?.horario || "",
+        tentativas: 0,
+      };
+      leads[p.id] = touch(merged);
+      if (!ex?.verificado) {
+        pushLog("verificado", merged);
+        changed++;
+      }
+      const a = cardFor(p.id);
+      if (a) markCard(a, merged);
+    }
+    if (changed) debug(`lote: ${places.length} locais, ${changed} novos`);
+    scheduleFlush();
+    renderHud();
+  }
+
+  window.addEventListener("message", (e) => {
+    if (e.source !== window || e.data?.source !== "prospecta-hook" || typeof e.data.body !== "string") return;
+    seenBatches.add(normUrl(e.data.url));
+    ingestBatch(parseSearchBody(e.data.body));
+  });
+  window.postMessage({ source: "prospecta-ready" }, location.origin);
+
+  // reserva: se o gancho não pegou algum lote, relê o mesmo endereço que o maps usou
+  let fallbackTimer = null;
+  function scheduleFallback() {
+    clearTimeout(fallbackTimer);
+    fallbackTimer = setTimeout(async () => {
+      if (dead || !capturing) return;
+      const pendentes = Object.values(leads).some((l) => !l.verificado);
+      if (!pendentes) return;
+      const urls = performance
+        .getEntriesByType("resource")
+        .map((e) => e.name)
+        .filter((u) => u.includes("tbm=map") && !seenBatches.has(normUrl(u)));
+      for (const u of urls) {
+        seenBatches.add(normUrl(u));
+        try {
+          const body = await (await fetch(u, { credentials: "include" })).text();
+          debug("lote relido pela reserva");
+          ingestBatch(parseSearchBody(body));
+        } catch {}
+      }
+    }, 2500);
+  }
+
   // ---- detalhe ----
 
   function applyDetail(d) {
@@ -248,6 +324,7 @@
       lat: d.lat ?? lead.lat,
       lng: d.lng ?? lead.lng,
       verificado: true,
+      fonte: "detalhe",
     });
     lead.score = scoreLead({ siteType: lead.tipo_site, reviews: lead.avaliacoes, rating: lead.nota, phone: lead.telefone });
     touch(lead);
@@ -301,13 +378,15 @@
   function nextUnverified() {
     return [...document.querySelectorAll(CARD_SELECTOR)].find((a) => {
       const lead = leads[idOf(a)];
-      return lead && !lead.verificado && (lead.tentativas || 0) < MAX_TRIES;
+      const age = Date.now() - (Date.parse(lead?.capturado_em) || 0);
+      return lead && !lead.verificado && (lead.tentativas || 0) < MAX_TRIES && age > 4000;
     });
   }
 
   async function loadMore() {
     const feed = document.querySelector('[role="feed"]');
     if (!feed) return false;
+    if (/chegou ao final da lista|reached the end of the list/i.test(feed.innerText)) return false;
     const before = document.querySelectorAll(CARD_SELECTOR).length;
     for (let i = 0; i < 4; i++) {
       feed.scrollTop = feed.scrollHeight;
@@ -345,9 +424,16 @@
       }
       let a = nextUnverified();
       if (!a) {
-        if (!fullRun || !(await loadMore())) break;
-        a = nextUnverified();
-        if (!a) break;
+        if (fullRun) renderHud("rolando a lista");
+        if (!fullRun || !(await loadMore())) {
+          // pode ter card que ainda não completou 4s; espera um pouco antes de desistir
+          if (Object.values(leads).some((l) => !l.verificado && (l.tentativas || 0) < MAX_TRIES)) {
+            await sleep(1500);
+            if (nextUnverified()) continue;
+          }
+          break;
+        }
+        continue;
       }
       const id = idOf(a);
       const nome = leads[id].nome;
@@ -431,8 +517,8 @@
     }
     const c = counts();
     hud.className = !capturing ? "prsp-hud--paused" : running ? "prsp-hud--verify" : "";
-    const status = !capturing ? "Pausado" : running ? "Verificando" : "Capturando";
-    const sub = !capturing ? "" : lastActivity || (c.pendentes ? "para de rolar que eu verifico" : "tudo verificado");
+    const status = !capturing ? "Pausado" : running ? (fullRun ? "Capturando tudo" : "Verificando") : "Capturando";
+    const sub = !capturing ? "" : lastActivity || (c.pendentes ? "completando os que faltam" : "role a lista ou clique em capturar tudo");
     hud.innerHTML = `
       <span class="prsp-hud__brand">Prospecta <em>v${VERSION}</em></span>
       <span class="prsp-hud__status"><i></i>${status}<small></small></span>
@@ -440,7 +526,7 @@
       <span class="prsp-hud__num prsp-hud__none"><b>${c.semSite}</b> sem site</span>
       <span class="prsp-hud__num prsp-hud__social"><b>${c.social}</b> rede social</span>
       <span class="prsp-hud__num prsp-hud__pending"><b>${c.pendentes}</b> a verificar</span>
-      <button data-act="all" type="button">${fullRun ? "Parar" : "Verificar tudo"}</button>
+      <button data-act="all" type="button">${fullRun ? "Parar" : "Capturar tudo"}</button>
       <button data-act="pause" type="button">${capturing ? "Pausar" : "Retomar"}</button>
     `;
     // texto via textContent porque pode ter nome vindo do maps

@@ -1,6 +1,6 @@
 (() => {
   const SOCIAL_RE =
-    /(instagram\.com|facebook\.com|fb\.com|fb\.me|linktr\.ee|wa\.me|whatsapp\.com|api\.whatsapp|tiktok\.com|bio\.link|beacons\.ai|linkbio|taplink)/i;
+    /(instagram\.com|facebook\.com|fb\.com|fb\.me|linktr\.ee|wa\.me|whatsapp\.com|api\.whatsapp|tiktok\.com|bio\.link|beacons\.ai|linkbio|taplink|contate\.me|lnk\.bio|linkr\.bio|msha\.ke|youtube\.com|twitter\.com|x\.com\/|kwai)/i;
   const PHONE_RE = /(?:\+?55\s?)?\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/;
   const STATUS_RE = /^(aberto|fechado|abre|fecha|open|closed|opens|closes|temporariamente|permanentemente)/i;
 
@@ -225,5 +225,92 @@
     };
   }
 
-  window.ProspectaParser = { parseCard, parseDetail, scoreLead, placeKey, VERSION: "1.3.2" };
+  // ---- lotes da busca ----
+  // o maps baixa os resultados de 20 em 20 por /search?tbm=map; cada lote já traz
+  // site, telefone e endereço, então dá pra classificar sem abrir card nenhum
+
+  const at = (o, ...keys) => {
+    try {
+      return keys.reduce((a, k) => (a == null ? undefined : a[k]), o);
+    } catch {
+      return undefined;
+    }
+  };
+  const stripXssi = (t) => t.replace(/^\)\]\}'\n?/, "").replace(/\/\*""\*\/\s*$/, "");
+  const isPlaceId = (v) => typeof v === "string" && /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(v);
+
+  function findResultList(root) {
+    let found = null;
+    const walk = (v, depth) => {
+      if (found || depth > 5 || !Array.isArray(v)) return;
+      if (v.length && v.some((r) => isPlaceId(at(r, 1, 10)))) {
+        found = v;
+        return;
+      }
+      v.forEach((x) => walk(x, depth + 1));
+    };
+    walk(root, 0);
+    return found || [];
+  }
+
+  function cidLink(id) {
+    try {
+      return `https://www.google.com/maps?cid=${BigInt(id.split(":")[1]).toString()}`;
+    } catch {
+      return "";
+    }
+  }
+
+  function parseSearchBody(text) {
+    let data;
+    try {
+      data = JSON.parse(stripXssi(text));
+      // o primeiro lote vem embrulhado em {c, d}, os seguintes não
+      if (data && !Array.isArray(data) && typeof data.d === "string") data = JSON.parse(stripXssi(data.d));
+    } catch {
+      return [];
+    }
+    const busca = searchTerm();
+    return findResultList(data)
+      .map((r) => r?.[1])
+      .filter((p) => isPlaceId(at(p, 10)) && at(p, 11))
+      .map((p) => {
+        const id = p[10];
+        const rawSite = at(p, 7, 0);
+        let site = "";
+        if (typeof rawSite === "string") {
+          try {
+            site = resolveHref(new URL(rawSite, "https://www.google.com").href);
+          } catch {
+            site = rawSite;
+          }
+        }
+        const telefone = at(p, 178, 0, 0) || "";
+        const nota = typeof at(p, 4, 7) === "number" ? at(p, 4, 7) : null;
+        const avaliacoes = typeof at(p, 4, 8) === "number" ? at(p, 4, 8) : 0;
+        const tipo_site = !site ? "nenhum" : SOCIAL_RE.test(site) ? "rede_social" : "proprio";
+        const lead = {
+          id,
+          nome: p[11],
+          categoria: at(p, 13, 0) || "",
+          endereco: at(p, 39) || "",
+          telefone,
+          nota,
+          avaliacoes,
+          site,
+          tipo_site,
+          busca,
+          link_maps: cidLink(id),
+          lat: at(p, 9, 2) ?? null,
+          lng: at(p, 9, 3) ?? null,
+          verificado: true,
+          fonte: "lote",
+          capturado_em: new Date().toISOString(),
+        };
+        lead.score = scoreLead({ siteType: tipo_site, reviews: avaliacoes, rating: nota, phone: telefone });
+        return lead;
+      });
+  }
+
+  window.ProspectaParser = { parseCard, parseDetail, parseSearchBody, scoreLead, placeKey, VERSION: "1.4.0" };
 })();

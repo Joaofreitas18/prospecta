@@ -141,13 +141,13 @@ function renderSummary() {
 
   $("auto").checked = state.autoVerify;
   const vb = $("verify");
-  vb.textContent = state.verifying ? "Parar" : "Verificar tudo";
+  vb.textContent = state.verifying ? "Parar" : "Capturar tudo";
   vb.className = `btn btn--sm ${state.verifying ? "btn--stop" : "btn--primary"}`;
-  vb.title = "Abre card por card e rola a lista até o fim";
+  vb.title = "Rola a lista até o fim e captura todos os lotes";
 
   const st = $("toggle");
   st.className = `status ${!state.capturing ? "paused" : state.verifying ? "verifying" : ""}`;
-  $("toggle-label").textContent = !state.capturing ? "Pausado" : state.verifying ? "Verificando" : "Capturando";
+  $("toggle-label").textContent = !state.capturing ? "Pausado" : state.verifying ? "Capturando tudo" : "Capturando";
   st.title = state.capturing ? "Pausar captura" : "Retomar captura";
 }
 

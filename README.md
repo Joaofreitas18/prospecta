@@ -2,16 +2,18 @@
 
 Extensão pro Chrome que pega as empresas do Google Maps enquanto você rola a lista de resultados e mostra quem não tem site. Dá pra exportar tudo em CSV.
 
-Fiz pra prospectar cliente sem ficar abrindo card por card. Ela não faz requisição própria, só lê o que o Maps carrega na tela.
+Fiz pra prospectar cliente sem ficar abrindo card por card. Ela lê o que o próprio Maps baixa enquanto você usa, sem bater em API nenhuma.
 
 ## Como funciona
 
 Você faz uma busca no Maps (`google.com/maps` ou `google.com.br/maps`, tipo `barbearia são luís`) e vai rolando. Cada card que aparece entra na lista com nome, nota, avaliações e categoria.
 
-O problema é que o card da lista não mostra o site. Isso só aparece no detalhe, quando você clica. Então a extensão abre os cards sozinha:
+O card da lista não mostra o site, mas o Maps baixa os resultados de 20 em 20 e cada lote já vem com site, telefone, endereço e coordenadas de todo mundo. A extensão lê esses lotes no momento em que chegam, então não precisa clicar em nada:
 
-- **automático**: enquanto você rola, ela só captura. Quando você para por uns 2 segundos, ela vai abrindo os cards que estão na tela e lê site, telefone, endereço completo e horário. Se você voltar a rolar, ela espera.
-- **Verificar tudo**: abre card por card e vai rolando a lista até o fim, sem você precisar fazer nada.
+- **rolando você mesmo**: cada lote que o Maps carrega entra classificado na hora
+- **Capturar tudo**: a extensão rola a lista sozinha até o fim. Uma busca inteira (uns 120 resultados) leva uns 15 segundos
+
+Se algum lead não vier no lote, a extensão abre o card dele pra completar. Isso é só reserva e dá pra desligar no painel.
 
 Depois de verificado, o lead fica como:
 
@@ -43,8 +45,8 @@ O Maps mostra no máximo uns 120 resultados por busca, então vale buscar por ba
 
 - O Google muda o HTML do Maps sem avisar. O parser usa atributos ARIA e texto em vez de classe CSS pra quebrar menos, mas uma hora quebra. Quando acontecer, o ajuste é no `src/parser.js`.
 - Se você recarregar a extensão com o Maps aberto, ela tenta se reconectar sozinha. Se o contador na página ficar vermelho, é só dar F5.
-- Cada card leva uns 2,5 a 3 segundos pra verificar, a maior parte é o próprio Maps carregando o detalhe. 100 leads dá uns 4 a 5 minutos.
-- Com várias abas do Maps abertas, só a aba que está na frente verifica. As outras só capturam.
+- O formato dos lotes não é documentado. Se o Google mudar, a leitura fica em `parseSearchBody()` no `src/parser.js`, e enquanto isso a extensão cai pro modo de abrir card por card, que é mais lento (uns 3 segundos por lead).
+- Com várias abas do Maps abertas, só a aba que está na frente abre cards. Os lotes são lidos em todas.
 
 ## Aviso
 
