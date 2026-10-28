@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Prospecta",
+  "version": "1.1.0",
+  "description": "Prospecção de clientes no Google Maps: captura empresas enquanto você rola a lista, identifica quem não tem site e exporta em CSV.",
+  "permissions": [
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://www.google.com/maps/*"
+  ],
+  "action": {
+    "default_title": "Prospecta - abrir painel",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/maps/*"
+      ],
+      "js": [
+        "src/parser.js",
+        "src/content.js"
+      ],
+      "css": [
+        "src/content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "side_panel": {
+    "default_path": "popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  }
+}
