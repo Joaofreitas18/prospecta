@@ -188,9 +188,14 @@
 
   // painel de detalhes que abre ao clicar no card; é o único lugar com o site
   function parseDetail() {
+    // negócio sem endereço (delivery, atende em casa) não tem o item "address"
     const address = document.querySelector('[data-item-id="address"]');
-    if (!address) return null;
-    const pane = address.closest('[role="main"]');
+    const pane =
+      address?.closest('[role="main"]') ||
+      [...document.querySelectorAll('[role="main"][aria-label]')].find(
+        (m) => !m.querySelector('[role="feed"]') && m.querySelector("[data-item-id]")
+      );
+    if (!pane) return null;
     const nome = (pane?.getAttribute("aria-label") || "").trim();
     const idMatch = location.href.match(/!1s([^!?]+)/);
     if (!nome || !idMatch) return null;
@@ -205,7 +210,7 @@
       telefone = (label.match(PHONE_RE) || [""])[0].trim() || phoneEl.getAttribute("data-item-id").replace("phone:tel:", "");
     }
 
-    const endereco = (address.getAttribute("aria-label") || "").replace(/^Endereço:\s*/i, "").trim();
+    const endereco = (address?.getAttribute("aria-label") || "").replace(/^Endereço:\s*/i, "").trim();
     const horario = parseHours(scope);
 
     return {
@@ -220,5 +225,5 @@
     };
   }
 
-  window.ProspectaParser = { parseCard, parseDetail, scoreLead, placeKey, VERSION: "1.3.0" };
+  window.ProspectaParser = { parseCard, parseDetail, scoreLead, placeKey, VERSION: "1.3.2" };
 })();

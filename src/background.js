@@ -9,7 +9,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // abas do maps abertas antes da instalação/atualização ficam sem o script
 async function reinject() {
-  const tabs = await chrome.tabs.query({ url: "https://www.google.com/maps/*" });
+  const tabs = await chrome.tabs.query({ url: ["https://www.google.com/maps/*", "https://www.google.com.br/maps/*"] });
   for (const tab of tabs) {
     try {
       await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["src/content.css"] });

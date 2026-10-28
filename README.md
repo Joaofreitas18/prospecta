@@ -6,7 +6,7 @@ Fiz pra prospectar cliente sem ficar abrindo card por card. Ela não faz requisi
 
 ## Como funciona
 
-Você faz uma busca no Maps (tipo `barbearia são luís`) e vai rolando. Cada card que aparece entra na lista com nome, nota, avaliações e categoria.
+Você faz uma busca no Maps (`google.com/maps` ou `google.com.br/maps`, tipo `barbearia são luís`) e vai rolando. Cada card que aparece entra na lista com nome, nota, avaliações e categoria.
 
 O problema é que o card da lista não mostra o site. Isso só aparece no detalhe, quando você clica. Então a extensão abre os cards sozinha:
 
@@ -43,6 +43,8 @@ O Maps mostra no máximo uns 120 resultados por busca, então vale buscar por ba
 
 - O Google muda o HTML do Maps sem avisar. O parser usa atributos ARIA e texto em vez de classe CSS pra quebrar menos, mas uma hora quebra. Quando acontecer, o ajuste é no `src/parser.js`.
 - Se você recarregar a extensão com o Maps aberto, ela tenta se reconectar sozinha. Se o contador na página ficar vermelho, é só dar F5.
+- Cada card leva uns 2,5 a 3 segundos pra verificar, a maior parte é o próprio Maps carregando o detalhe. 100 leads dá uns 4 a 5 minutos.
+- Com várias abas do Maps abertas, só a aba que está na frente verifica. As outras só capturam.
 
 ## Aviso
 

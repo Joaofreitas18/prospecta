@@ -378,7 +378,7 @@ $("clear").addEventListener("click", () => {
   const n = Object.keys(state.leads).length;
   if (confirm(`Apagar os ${n} leads capturados e o log? Isso não pode ser desfeito.`)) {
     closeSheet();
-    chrome.storage.local.set({ [STORE_KEY]: {}, [LOG_KEY]: [] });
+    chrome.storage.local.set({ [STORE_KEY]: {}, [LOG_KEY]: [], clearedAt: Date.now() });
   }
 });
 
