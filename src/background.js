@@ -4,7 +4,19 @@ const STATE_KEY = "capturing";
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   updateBadge();
+  reinject();
 });
+
+// abas do maps abertas antes da instalação/atualização ficam sem o script
+async function reinject() {
+  const tabs = await chrome.tabs.query({ url: "https://www.google.com/maps/*" });
+  for (const tab of tabs) {
+    try {
+      await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["src/content.css"] });
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["src/parser.js", "src/content.js"] });
+    } catch {}
+  }
+}
 chrome.runtime.onStartup.addListener(updateBadge);
 
 function compact(n) {

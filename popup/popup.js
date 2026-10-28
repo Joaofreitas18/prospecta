@@ -2,6 +2,7 @@ const STORE_KEY = "leads";
 const STATE_KEY = "capturing";
 const FILTER_KEY = "filters";
 const LOG_KEY = "log";
+const VERIFY_KEY = "verifying";
 
 const TIPO_LABEL = {
   nenhum: "Sem site",
@@ -19,6 +20,7 @@ const COLUMNS = [
   ["nota", "Nota"],
   ["avaliacoes", "Avaliações"],
   ["tipo_site", "Tipo de site"],
+  ["verificado", "Verificado"],
   ["site", "Site"],
   ["busca", "Busca"],
   ["link_maps", "Link Maps"],
@@ -30,6 +32,7 @@ const state = {
   leads: {},
   log: [],
   capturing: true,
+  verifying: false,
   filters: { type: "nosite", minReviews: 0, minScore: 0 },
   lastLogT: 0,
 };
@@ -50,6 +53,7 @@ function applyFilters(list, f) {
 function toCSV(rows) {
   const esc = (v) => {
     if (v === null || v === undefined) return "";
+    if (typeof v === "boolean") return v ? "sim" : "não";
     let s = typeof v === "number" ? String(v).replace(".", ",") : String(v);
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // formula injection no excel
     return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -119,9 +123,16 @@ function renderSummary() {
     segs[i].style.width = total ? `${(n / total) * 100}%` : "0";
   });
 
+  const pend = all.filter((l) => !l.verificado).length;
+  $("s-pending").textContent = pend;
+  const vb = $("verify");
+  vb.textContent = state.verifying ? "Parar" : "Verificar sites";
+  vb.className = `btn btn--sm ${state.verifying ? "btn--stop" : "btn--primary"}`;
+  vb.disabled = !state.verifying && pend === 0;
+
   const btn = $("toggle");
   btn.classList.toggle("paused", !state.capturing);
-  $("toggle-label").textContent = state.capturing ? "Capturando" : "Pausado";
+  $("toggle-label").textContent = !state.capturing ? "Pausado" : state.verifying ? "Verificando" : "Capturando";
   btn.title = state.capturing ? "Pausar captura" : "Retomar captura";
 }
 
@@ -130,7 +141,7 @@ function renderFeed() {
   feed.innerHTML = "";
   const newest = state.log[0]?.t || 0;
   state.log.slice(0, 40).forEach((e) => {
-    const row = buildRow({ ...e, extra: e.acao === "atualizado" ? "atualizado" : null });
+    const row = buildRow({ ...e, extra: e.acao === "verificado" ? "✓ verificado" : null });
     const side = row.querySelector(".side");
     side.prepend(el("span", "time", ago(e.t)));
     side.querySelector(".score").remove();
@@ -220,6 +231,8 @@ $("f-score").addEventListener("input", (e) => {
   saveFilters();
 });
 
+$("verify").addEventListener("click", () => chrome.storage.local.set({ [VERIFY_KEY]: !state.verifying }));
+
 $("toggle").addEventListener("click", () => chrome.storage.local.set({ [STATE_KEY]: !state.capturing }));
 
 $("export").addEventListener("click", () => {
@@ -240,13 +253,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes[STORE_KEY]) state.leads = changes[STORE_KEY].newValue || {};
   if (changes[LOG_KEY]) state.log = changes[LOG_KEY].newValue || [];
   if (changes[STATE_KEY]) state.capturing = changes[STATE_KEY].newValue !== false;
-  if (changes[STORE_KEY] || changes[LOG_KEY] || changes[STATE_KEY]) renderAll();
+  if (changes[VERIFY_KEY]) state.verifying = changes[VERIFY_KEY].newValue === true;
+  if (changes[STORE_KEY] || changes[LOG_KEY] || changes[STATE_KEY] || changes[VERIFY_KEY]) renderAll();
 });
 
 setInterval(renderFeed, 5000);
 
 (async function init() {
-  const data = await chrome.storage.local.get([STORE_KEY, STATE_KEY, FILTER_KEY, LOG_KEY]);
+  const data = await chrome.storage.local.get([STORE_KEY, STATE_KEY, FILTER_KEY, LOG_KEY, VERIFY_KEY]);
+  state.verifying = data[VERIFY_KEY] === true;
   state.leads = data[STORE_KEY] || {};
   state.log = data[LOG_KEY] || [];
   state.capturing = data[STATE_KEY] !== false;

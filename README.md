@@ -2,16 +2,24 @@
 
 Extensão pro Chrome que pega as empresas do Google Maps enquanto você rola a lista de resultados e mostra quem não tem site. Dá pra exportar tudo em CSV.
 
-Fiz pra prospectar cliente sem ficar abrindo card por card. Ela não faz requisição nenhuma, só lê o que o Maps já carregou na tela.
+Fiz pra prospectar cliente sem ficar abrindo card por card. Ela não faz requisição própria, só lê o que o Maps carrega na tela.
 
 ## Como funciona
 
-Você faz uma busca no Maps (tipo `barbearia são luís`) e vai rolando. Cada card que aparece é lido e classificado:
+Você faz uma busca no Maps (tipo `barbearia são luís`) e vai rolando. Cada card que aparece entra na lista com nome, nota, avaliações e categoria.
 
-- **sem site**: o card tem os botões de ação e nenhum é de site
+O problema é que o card da lista não mostra o site. Isso só aparece no detalhe, quando você clica. Então tem duas formas de completar:
+
+- **clicando você mesmo**: abriu o detalhe de um card, a extensão lê o site e o telefone
+- **Verificar sites**: botão no painel que vai abrindo card por card sozinho, com uma pausa aleatória entre um e outro, e rola a lista quando acabam os da tela
+
+Depois de verificado, o lead fica como:
+
+- **sem site**: não tem site cadastrado
 - **rede social**: o "site" é Instagram, Linktree, wa.me etc
-- **não verificado**: o card não mostrou os botões, então não dá pra afirmar nada
 - **site próprio**: tem domínio
+
+Enquanto não verifica, fica como **não verificado**.
 
 Cada lead ganha um score de 0 a 100. A ideia é priorizar quem não tem site mas já tem movimento (muita avaliação, nota boa, telefone). Negócio sem site e com 3 avaliações não vale a ligação. A conta fica em `scoreLead()` no `src/parser.js`.
 
@@ -27,14 +35,14 @@ Precisa do Chrome 116+ por causa do painel lateral.
 
 ## CSV
 
-Separado por `;` com BOM, abre direto no Excel. Colunas: score, nome, categoria, telefone, endereço, nota, avaliações, tipo de site, site, busca, link do Maps e data da captura.
+Separado por `;` com BOM, abre direto no Excel. Colunas: score, nome, categoria, telefone, endereço, nota, avaliações, tipo de site, verificado, site, busca, link do Maps e data da captura.
 
 O Maps mostra no máximo uns 120 resultados por busca, então vale buscar por bairro. Os leads vão acumulando entre buscas e não duplicam.
 
 ## Problemas conhecidos
 
 - O Google muda o HTML do Maps sem avisar. O parser usa atributos ARIA e texto em vez de classe CSS pra quebrar menos, mas uma hora quebra. Quando acontecer, o ajuste é no `src/parser.js`.
-- Telefone nem sempre aparece no card da lista, só no detalhe.
+- Se você recarregar a extensão com o Maps aberto, ela tenta se reconectar sozinha. Se o contador na página ficar vermelho, é só dar F5.
 
 ## Aviso
 

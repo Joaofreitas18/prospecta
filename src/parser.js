@@ -120,9 +120,12 @@
     return Math.round(Math.min(100, score));
   }
 
+  // com o detalhe aberto a url vira /maps/place/, então guarda a última busca
+  let lastSearch = "";
   function searchTerm() {
     const m = location.pathname.match(/\/maps\/search\/([^/@]+)/);
-    return m ? decodeURIComponent(m[1]).replace(/\+/g, " ") : "";
+    if (m) lastSearch = decodeURIComponent(m[1]).replace(/\+/g, " ");
+    return lastSearch;
   }
 
   function parseCard(anchor) {
@@ -162,5 +165,33 @@
     return lead;
   }
 
-  window.ProspectaParser = { parseCard, scoreLead, placeKey };
+  // painel de detalhes que abre ao clicar no card; é o único lugar com o site
+  function parseDetail() {
+    const address = document.querySelector('[data-item-id="address"]');
+    if (!address) return null;
+    const pane = address.closest('[role="main"]');
+    const nome = (pane?.getAttribute("aria-label") || "").trim();
+    const idMatch = location.href.match(/!1s([^!?]+)/);
+    if (!nome || !idMatch) return null;
+
+    const scope = pane || document;
+    const authority = scope.querySelector('a[data-item-id="authority"]');
+    const site = authority ? resolveHref(authority.href) : "";
+    const phoneEl = scope.querySelector('[data-item-id^="phone:tel:"]');
+    let telefone = "";
+    if (phoneEl) {
+      const label = phoneEl.getAttribute("aria-label") || phoneEl.innerText || "";
+      telefone = (label.match(PHONE_RE) || [""])[0].trim() || phoneEl.getAttribute("data-item-id").replace("phone:tel:", "");
+    }
+
+    return {
+      id: decodeURIComponent(idMatch[1]),
+      nome,
+      site,
+      tipo_site: !site ? "nenhum" : SOCIAL_RE.test(site) ? "rede_social" : "proprio",
+      telefone,
+    };
+  }
+
+  window.ProspectaParser = { parseCard, parseDetail, scoreLead, placeKey };
 })();
