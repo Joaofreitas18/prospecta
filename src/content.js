@@ -1,22 +1,26 @@
 (() => {
-  const { parseCard, parseDetail, scoreLead } = window.ProspectaParser;
+  const { parseCard, parseDetail, scoreLead, VERSION } = window.ProspectaParser;
   const STORE_KEY = "leads";
   const STATE_KEY = "capturing";
   const VERIFY_KEY = "verifying";
+  const AUTO_KEY = "autoVerify";
   const LOG_KEY = "log";
   const LOG_MAX = 80;
   const CARD_SELECTOR = 'a[href*="/maps/place/"]';
+  const IDLE_MS = 2500;
 
   let leads = {};
   let log = [];
   let capturing = true;
-  let verifying = false;
+  let autoVerify = true;
+  let fullRun = false; // botão "verificar tudo": também rola a lista
+  let running = false;
   let dead = false;
+  let lastInput = 0;
   let pending = new Set();
   let flushTimer = null;
   let hud = null;
 
-  // se a extensão foi recarregada, essa instância fica órfã
   const alive = () => {
     try {
       return !!chrome.runtime?.id;
@@ -29,29 +33,31 @@
     if (dead) return;
     dead = true;
     observer.disconnect();
-    verifying = false;
+    running = false;
     if (hud) {
       hud.className = "prsp-hud--dead";
       hud.innerHTML = "<strong>Prospecta foi atualizada</strong><span>aperte F5 nesta página</span>";
     }
   }
 
+  const save = (obj) => {
+    if (!alive()) return die();
+    chrome.storage.local.set(obj).catch(die);
+  };
+
   async function load() {
-    const data = await chrome.storage.local.get([STORE_KEY, STATE_KEY, LOG_KEY]);
+    const data = await chrome.storage.local.get([STORE_KEY, STATE_KEY, LOG_KEY, AUTO_KEY]);
     leads = data[STORE_KEY] || {};
     log = data[LOG_KEY] || [];
     capturing = data[STATE_KEY] !== false;
-    // nunca começa verificando sozinho depois de um F5
+    autoVerify = data[AUTO_KEY] !== false;
     await chrome.storage.local.set({ [VERIFY_KEY]: false });
     renderHud();
   }
 
   function scheduleFlush() {
     clearTimeout(flushTimer);
-    flushTimer = setTimeout(() => {
-      if (!alive()) return die();
-      chrome.storage.local.set({ [STORE_KEY]: leads, [LOG_KEY]: log }).catch(die);
-    }, 300);
+    flushTimer = setTimeout(() => save({ [STORE_KEY]: leads, [LOG_KEY]: log }), 300);
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -59,30 +65,35 @@
     if (changes[STORE_KEY]) leads = changes[STORE_KEY].newValue || {};
     if (changes[LOG_KEY]) log = changes[LOG_KEY].newValue || [];
     if (changes[STATE_KEY]) capturing = changes[STATE_KEY].newValue !== false;
+    if (changes[AUTO_KEY]) autoVerify = changes[AUTO_KEY].newValue !== false;
     if (changes[VERIFY_KEY]) {
-      const v = changes[VERIFY_KEY].newValue === true;
-      if (v && !verifying) runVerify();
-      verifying = v;
+      fullRun = changes[VERIFY_KEY].newValue === true;
+      if (fullRun) kick();
     }
     renderHud();
+    kick();
   });
 
+  // só eventos reais do usuário; os cliques da própria extensão não contam
+  ["wheel", "mousedown", "keydown", "touchstart"].forEach((type) =>
+    window.addEventListener(
+      type,
+      (e) => {
+        if (e.isTrusted && !e.target.closest?.("#prsp-hud")) lastInput = Date.now();
+      },
+      { capture: true, passive: true }
+    )
+  );
+
   function pushLog(acao, lead) {
-    log.unshift({
-      t: Date.now(),
-      acao,
-      nome: lead.nome,
-      tipo_site: lead.tipo_site,
-      score: lead.score,
-      categoria: lead.categoria,
-    });
+    log.unshift({ t: Date.now(), acao, id: lead.id, nome: lead.nome, tipo_site: lead.tipo_site, score: lead.score, categoria: lead.categoria });
     if (log.length > LOG_MAX) log.length = LOG_MAX;
   }
 
   const BADGES = {
     nenhum: ["SEM SITE", "prsp-badge--none"],
     rede_social: ["SÓ REDE SOCIAL", "prsp-badge--social"],
-    nao_verificado: ["NÃO VERIFICADO", "prsp-badge--unknown"],
+    nao_verificado: ["VERIFICANDO…", "prsp-badge--unknown"],
     proprio: ["TEM SITE", "prsp-badge--site"],
   };
 
@@ -97,12 +108,10 @@
     }
     const [label, cls] = BADGES[lead.tipo_site] || BADGES.nao_verificado;
     el.className = `prsp-badge ${cls}`;
-    el.textContent = `${label} · ${lead.score}`;
+    el.textContent = lead.verificado ? `${label} · ${lead.score}` : label;
   }
 
-  function cardFor(id) {
-    return [...document.querySelectorAll(CARD_SELECTOR)].find((a) => a.href.includes(id));
-  }
+  const cardFor = (id) => [...document.querySelectorAll(CARD_SELECTOR)].find((a) => a.href.includes(id));
 
   // ---- lista ----
 
@@ -110,13 +119,13 @@
     if (!capturing || dead) return;
     const lead = parseCard(anchor);
     if (!lead) return;
-
     const existing = leads[lead.id];
     if (!existing) {
       leads[lead.id] = lead;
       pushLog("novo", lead);
       scheduleFlush();
       renderHud();
+      kick();
     } else if (!existing.verificado && ((!existing.nota && lead.nota) || (!existing.categoria && lead.categoria))) {
       leads[lead.id] = { ...existing, ...lead, capturado_em: existing.capturado_em };
       scheduleFlush();
@@ -144,18 +153,24 @@
     );
   }
 
-  // ---- painel de detalhes ----
+  // ---- detalhe ----
 
   function applyDetail(d) {
     const lead = leads[d.id];
     if (!lead || lead.nome !== d.nome) return false;
-    const changed = !lead.verificado || lead.site !== d.site || (!lead.telefone && d.telefone);
-    if (!changed) return true;
+    const fresh = !lead.verificado;
+    if (!fresh && lead.site === d.site && (lead.telefone || !d.telefone)) return true;
 
-    lead.site = d.site;
-    lead.tipo_site = d.tipo_site;
-    if (d.telefone) lead.telefone = d.telefone;
-    lead.verificado = true;
+    Object.assign(lead, {
+      site: d.site,
+      tipo_site: d.tipo_site,
+      telefone: d.telefone || lead.telefone,
+      endereco: d.endereco || lead.endereco,
+      horario: d.horario || lead.horario,
+      lat: d.lat ?? lead.lat,
+      lng: d.lng ?? lead.lng,
+      verificado: true,
+    });
     lead.score = scoreLead({ siteType: lead.tipo_site, reviews: lead.avaliacoes, rating: lead.nota, phone: lead.telefone });
     pushLog("verificado", lead);
     scheduleFlush();
@@ -168,18 +183,18 @@
   let detailTimer = null;
   function checkDetail() {
     clearTimeout(detailTimer);
-    // espera o painel terminar de renderizar o bloco de site/telefone
     detailTimer = setTimeout(() => {
-      if (!capturing || dead) return;
+      if (!capturing || dead || running) return;
       const d = parseDetail();
       if (d) applyDetail(d);
     }, 700);
   }
 
-  // ---- verificação automática ----
+  // ---- verificação ----
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const jitter = (min, max) => min + Math.random() * (max - min);
+  const userBusy = () => Date.now() - lastInput < IDLE_MS;
 
   async function waitDetailFor(lead, timeout = 7000) {
     const start = Date.now();
@@ -196,7 +211,8 @@
 
   function nextUnverified() {
     return [...document.querySelectorAll(CARD_SELECTOR)].find((a) => {
-      const lead = leads[parseCard(a)?.id];
+      const id = parseCard(a)?.id;
+      const lead = id && leads[id];
       return lead && !lead.verificado && (lead.tentativas || 0) < 2;
     });
   }
@@ -214,30 +230,47 @@
     return false;
   }
 
-  async function runVerify() {
-    verifying = true;
+  let kickTimer = null;
+  function kick() {
+    clearTimeout(kickTimer);
+    kickTimer = setTimeout(() => {
+      if (!running && capturing && !dead && (autoVerify || fullRun)) loop();
+    }, 400);
+  }
+
+  async function loop() {
+    running = true;
     renderHud();
-    while (verifying && !dead) {
+    while (!dead && capturing && (autoVerify || fullRun)) {
+      // usuário rolando ou clicando: espera ele parar
+      if (userBusy() && !fullRun) {
+        renderHud("esperando você parar de rolar");
+        await sleep(600);
+        continue;
+      }
       let a = nextUnverified();
       if (!a) {
-        if (!(await loadMore())) break;
+        if (!fullRun || !(await loadMore())) break;
         a = nextUnverified();
         if (!a) break;
       }
       const lead = leads[parseCard(a).id];
-      a.scrollIntoView({ block: "center" });
+      renderHud(`verificando ${lead.nome}`);
+      if (fullRun) a.scrollIntoView({ block: "center" });
       a.click();
       const d = await waitDetailFor(lead);
-      if (d) {
-        applyDetail(d);
-      } else {
+      if (d) applyDetail(d);
+      else {
         lead.tentativas = (lead.tentativas || 0) + 1;
         scheduleFlush();
       }
-      await sleep(jitter(1200, 2200));
+      await sleep(jitter(1000, 1800));
     }
-    verifying = false;
-    if (alive()) chrome.storage.local.set({ [VERIFY_KEY]: false }).catch(die);
+    running = false;
+    if (fullRun) {
+      fullRun = false;
+      save({ [VERIFY_KEY]: false });
+    }
     renderHud();
   }
 
@@ -260,7 +293,7 @@
       }
     }
     if (pending.size) drain();
-    if (detail && !verifying) checkDetail();
+    if (detail) checkDetail();
   });
 
   // ---- HUD ----
@@ -275,31 +308,40 @@
     };
   }
 
-  function renderHud() {
+  function renderHud(activity) {
     if (!document.body || dead) return;
     if (!hud) {
       hud = document.createElement("div");
       hud.id = "prsp-hud";
-      hud.addEventListener("click", () => {
+      hud.addEventListener("click", (e) => {
+        const act = e.target.closest("[data-act]")?.dataset.act;
+        if (!act) return;
         if (!alive()) return die();
-        chrome.storage.local.set({ [STATE_KEY]: !capturing });
+        if (act === "pause") save({ [STATE_KEY]: !capturing });
+        if (act === "all") save({ [VERIFY_KEY]: !fullRun });
       });
       document.body.appendChild(hud);
     }
     const c = counts();
-    hud.className = !capturing ? "prsp-hud--paused" : verifying ? "prsp-hud--verify" : "";
-    const status = !capturing ? "❚❚ Pausado" : verifying ? "● Verificando sites" : "● Capturando";
+    hud.className = !capturing ? "prsp-hud--paused" : running ? "prsp-hud--verify" : "";
+    const status = !capturing ? "Pausado" : running ? "Verificando" : "Capturando";
+    const sub = !capturing ? "" : activity || (running ? "" : c.pendentes ? "para de rolar que eu verifico" : "tudo verificado");
     hud.innerHTML = `
-      <strong>${status}</strong>
-      <span>${c.total} leads</span>
-      <span class="prsp-hud__none">${c.semSite} sem site</span>
-      <span class="prsp-hud__social">${c.social} rede social</span>
-      <span class="prsp-hud__pending">${c.pendentes} a verificar</span>
+      <span class="prsp-hud__brand">Prospecta <em>v${VERSION}</em></span>
+      <span class="prsp-hud__status"><i></i>${status}<small></small></span>
+      <span class="prsp-hud__num"><b>${c.total}</b> leads</span>
+      <span class="prsp-hud__num prsp-hud__none"><b>${c.semSite}</b> sem site</span>
+      <span class="prsp-hud__num prsp-hud__social"><b>${c.social}</b> rede social</span>
+      <span class="prsp-hud__num prsp-hud__pending"><b>${c.pendentes}</b> a verificar</span>
+      <button data-act="all" type="button">${fullRun ? "Parar" : "Verificar tudo"}</button>
+      <button data-act="pause" type="button">${capturing ? "Pausar" : "Retomar"}</button>
     `;
-    hud.title = capturing ? "Clique para pausar" : "Clique para retomar";
+    // texto via textContent porque pode ter nome vindo do maps
+    const small = hud.querySelector("small");
+    small.textContent = sub;
+    small.hidden = !sub;
   }
 
-  // limpa o HUD de uma instância antiga, se a extensão foi recarregada
   document.getElementById("prsp-hud")?.remove();
 
   load().then(() => {
@@ -311,5 +353,6 @@
     });
     scan();
     checkDetail();
+    kick();
   });
 })();

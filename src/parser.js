@@ -32,6 +32,11 @@
     return slug ? decodeURIComponent(slug[1]) : href.split("?")[0];
   }
 
+  function coords(href) {
+    const m = href.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+    return m ? { lat: parseFloat(m[1]), lng: parseFloat(m[2]) } : { lat: null, lng: null };
+  }
+
   function parseNumber(str) {
     if (!str) return null;
     // "1.234" -> 1234, "4,6" -> 4.6
@@ -159,10 +164,26 @@
       tipo_site: siteType,
       busca: searchTerm(),
       link_maps: anchor.href.split("?")[0],
+      ...coords(anchor.href),
       capturado_em: new Date().toISOString(),
     };
     lead.score = scoreLead({ siteType, reviews, rating, phone });
     return lead;
+  }
+
+  const DAYS = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"];
+
+  // a tabela de horário vem como "quinta-feira, 08:00 a 20:00, Copiar horário..."
+  function parseHours(scope) {
+    const byDay = {};
+    scope.querySelectorAll("[aria-label]").forEach((el) => {
+      const parts = el.getAttribute("aria-label").split(",").map((p) => p.trim());
+      const day = DAYS.find((d) => parts[0].toLowerCase().startsWith(d));
+      if (day && parts[1] && !byDay[day]) byDay[day] = parts[1];
+    });
+    return DAYS.filter((d) => byDay[d])
+      .map((d) => `${d.slice(0, 3)} ${byDay[d]}`)
+      .join(" · ");
   }
 
   // painel de detalhes que abre ao clicar no card; é o único lugar com o site
@@ -184,14 +205,20 @@
       telefone = (label.match(PHONE_RE) || [""])[0].trim() || phoneEl.getAttribute("data-item-id").replace("phone:tel:", "");
     }
 
+    const endereco = (address.getAttribute("aria-label") || "").replace(/^Endereço:\s*/i, "").trim();
+    const horario = parseHours(scope);
+
     return {
       id: decodeURIComponent(idMatch[1]),
       nome,
+      endereco,
+      horario,
+      ...coords(location.href),
       site,
       tipo_site: !site ? "nenhum" : SOCIAL_RE.test(site) ? "rede_social" : "proprio",
       telefone,
     };
   }
 
-  window.ProspectaParser = { parseCard, parseDetail, scoreLead, placeKey };
+  window.ProspectaParser = { parseCard, parseDetail, scoreLead, placeKey, VERSION: "1.3.0" };
 })();

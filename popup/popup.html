@@ -9,8 +9,9 @@
 <body>
   <header class="top">
     <div class="brand">
-      <img src="../icons/icon32.png" alt="" width="22" height="22" />
+      <img src="../icons/icon32.png" alt="" width="24" height="24" />
       <span>Prospecta</span>
+      <em id="version"></em>
     </div>
     <button id="toggle" class="status" type="button">
       <i class="dot"></i><span id="toggle-label">Capturando</span>
@@ -28,15 +29,20 @@
     <ul class="legend">
       <li><i class="sw sw--none"></i>Sem site <b id="s-none">0</b></li>
       <li><i class="sw sw--social"></i>Só rede social <b id="s-social">0</b></li>
-      <li><i class="sw sw--unknown"></i>Não verificado <b id="s-unknown">0</b></li>
+      <li><i class="sw sw--unknown"></i>A verificar <b id="s-unknown">0</b></li>
       <li><i class="sw sw--site"></i>Site próprio <b id="s-site">0</b></li>
     </ul>
+
     <div class="verify">
-      <div>
-        <b id="s-pending">0</b> <span>a verificar</span>
-        <small>O site só aparece no detalhe do card. A verificação abre cada um e lê.</small>
-      </div>
-      <button id="verify" class="btn btn--primary btn--sm" type="button">Verificar sites</button>
+      <label class="switch">
+        <input id="auto" type="checkbox" checked />
+        <span class="track"><span class="thumb"></span></span>
+        <span class="switch__text">
+          Verificar automático
+          <small>Quando você para de rolar, ele abre os cards da tela e lê o site.</small>
+        </span>
+      </label>
+      <button id="verify" class="btn btn--primary btn--sm" type="button">Verificar tudo</button>
     </div>
   </section>
 
@@ -83,6 +89,32 @@
       </div>
     </section>
   </main>
+
+  <aside class="sheet" id="sheet" hidden>
+    <header class="sheet__top">
+      <button id="sheet-back" class="icon-btn" type="button" aria-label="Voltar">←</button>
+      <span>Estabelecimento</span>
+    </header>
+    <div class="sheet__body">
+      <div class="map" id="d-map"></div>
+      <div class="d-head">
+        <div>
+          <h2 id="d-name"></h2>
+          <p id="d-sub"></p>
+        </div>
+        <div class="d-score">
+          <b id="d-score"></b>
+          <span>score</span>
+        </div>
+      </div>
+      <span class="tag" id="d-tag"></span>
+      <dl class="info" id="d-info"></dl>
+      <div class="d-actions">
+        <a id="d-open" class="btn btn--primary" target="_blank" rel="noopener">Abrir no Maps</a>
+        <a id="d-route" class="btn btn--line" target="_blank" rel="noopener">Rotas</a>
+      </div>
+    </div>
+  </aside>
 
   <script src="popup.js"></script>
 </body>

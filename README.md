@@ -8,10 +8,10 @@ Fiz pra prospectar cliente sem ficar abrindo card por card. Ela não faz requisi
 
 Você faz uma busca no Maps (tipo `barbearia são luís`) e vai rolando. Cada card que aparece entra na lista com nome, nota, avaliações e categoria.
 
-O problema é que o card da lista não mostra o site. Isso só aparece no detalhe, quando você clica. Então tem duas formas de completar:
+O problema é que o card da lista não mostra o site. Isso só aparece no detalhe, quando você clica. Então a extensão abre os cards sozinha:
 
-- **clicando você mesmo**: abriu o detalhe de um card, a extensão lê o site e o telefone
-- **Verificar sites**: botão no painel que vai abrindo card por card sozinho, com uma pausa aleatória entre um e outro, e rola a lista quando acabam os da tela
+- **automático**: enquanto você rola, ela só captura. Quando você para por uns 2 segundos, ela vai abrindo os cards que estão na tela e lê site, telefone, endereço completo e horário. Se você voltar a rolar, ela espera.
+- **Verificar tudo**: abre card por card e vai rolando a lista até o fim, sem você precisar fazer nada.
 
 Depois de verificado, o lead fica como:
 
@@ -19,11 +19,11 @@ Depois de verificado, o lead fica como:
 - **rede social**: o "site" é Instagram, Linktree, wa.me etc
 - **site próprio**: tem domínio
 
-Enquanto não verifica, fica como **não verificado**.
-
 Cada lead ganha um score de 0 a 100. A ideia é priorizar quem não tem site mas já tem movimento (muita avaliação, nota boa, telefone). Negócio sem site e com 3 avaliações não vale a ligação. A conta fica em `scoreLead()` no `src/parser.js`.
 
-O ícone da extensão abre um painel lateral com as capturas ao vivo, os melhores leads e a exportação. O número no ícone é a quantidade de leads sem site próprio.
+O ícone da extensão abre um painel lateral com as capturas ao vivo, os melhores leads e a exportação. Clicando no nome de um lead abre a ficha dele, com mapa, endereço, telefone, site, horário e atalho de rotas. O número no ícone é a quantidade de leads sem site próprio.
+
+A versão aparece no painel e na barrinha da página do Maps. Se depois de atualizar o número não mudou, o Chrome ainda está carregando a pasta antiga.
 
 ## Instalar
 
@@ -35,7 +35,7 @@ Precisa do Chrome 116+ por causa do painel lateral.
 
 ## CSV
 
-Separado por `;` com BOM, abre direto no Excel. Colunas: score, nome, categoria, telefone, endereço, nota, avaliações, tipo de site, verificado, site, busca, link do Maps e data da captura.
+Separado por `;` com BOM, abre direto no Excel. Colunas: score, nome, categoria, telefone, endereço, nota, avaliações, tipo de site, verificado, site, horário, latitude, longitude, busca, link do Maps e data da captura.
 
 O Maps mostra no máximo uns 120 resultados por busca, então vale buscar por bairro. Os leads vão acumulando entre buscas e não duplicam.
 
@@ -50,4 +50,4 @@ Os termos do Google Maps não permitem extração automatizada, então isso aqui
 
 ## Licença
 
-MIT
+MIT. As fontes Manrope e JetBrains Mono são OFL, licenças na pasta `fonts/`.
